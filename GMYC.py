@@ -3,6 +3,7 @@ import sys
 import os
 import json
 import operator
+import Ultrametric_tree
 from ete2 import Tree, TreeStyle, TextFace, SeqGroup
 from subprocess import call
 
@@ -41,7 +42,7 @@ class exp_distribution:
 		for i in range(len(bl)):
 			s = s + gmyc_prob(bl[i], xl[i])
 		return s 
-		
+
 
 class speciation:
 	def __init__(self, num_lineage, rate = 0 , p = 1):
@@ -56,10 +57,10 @@ class speciation:
 	
 	def getBirthRate(self): # this is b
 		return self.rate * self.num_lineages
-		
+
 
 class coalescent:
-	def __init__(self, num_individual, rate, p):
+	def __init__(self, num_individual, rate = 0, p = 1.0):
 		 self.num_individual = num_individual #n
 		 self.rate = rate # 1/2N
 		 self.p = p
@@ -69,7 +70,7 @@ class coalescent:
 
 
 class coalescents:
-	def __init__(self, num_coalescent, rate = -1, p = -1, const_rate = True, const_p = True):
+	def __init__(self, num_coalescent, rate = 0, p = 1, const_rate = True, const_p = True):
 		self.coa_list = []
 		self.num_coa =  num_coalescent
 		self.rate = rate 
@@ -100,8 +101,8 @@ class coalescents:
 				coa.rate = rate
 			if self.const_p:
 				coa.p = p
-	
-	
+
+
 class waiting_time:
 	def __init__(self, length, num_coas = 0, num_lines = 0):
 		self.length = length #x
@@ -117,9 +118,12 @@ class waiting_time:
 	def logl(self):
 		self.b = self.spe.getBirthRate() + self.coas.getSumCoaRate() 
 		prob = self.b * math.exp (-1.0 * self.b * self.length)
-		return math.log(prob)
-			
-			
+		if prob <=0:
+			return -99999999999
+		else:
+			return math.log(prob)
+
+
 class optimization:
 	def __init__(self, range_a, range_b, step = 0.001):
 		self.range_a = range_a
@@ -140,12 +144,11 @@ class optimization:
 			return False, self.curr_x
 		else:
 			return True, self.curr_x
-			
-		
+
+
 class tree_time:
-	
-	def __init__(self, step = 0.01, maxiters = 100):
-		self.w_time_list = []
+	def __init__(self, wtimes, step = 0.01, maxiters = 100):
+		self.w_time_list = wtimes
 		self.llh = 0
 		self.spe_rate = 0.1
 		self.spe_p = 1
@@ -153,10 +156,6 @@ class tree_time:
 		self.coa_p = 1 
 		self.step = step
 		self.maxiters = maxiters
-	
-	def init_w_times(self, tree, threshold):
-		"""This should init the waiting times from a tree"""
-		pass
 	
 	def sum_llh(self):
 		for w_time in w_time_list:
@@ -227,25 +226,34 @@ class tree_time:
 		
 		self.llh = last_val
 		return last_val
-			
-		
-					
-		
-		
-		
+
+
+class species_finder:
+	def __init__(self, tree_file):
+		self.utree = Ultrametric_tree.um_tree(tree_file)
+		self.bestll = -999999999
+		self.threshold = None
+		self.num_spe = 2
 	
-		
-		
-
-    
-
-
+	def search(self):
+		curr_spe = 2
+		for tnode in self.utree.nodes:
+			wtimes = self.utree.get_waiting_times(tnode)
+			tt = tree_time(wtimes)
+			logl = tt.optimize_all(min_change = 1)
+			if logl > self.bestll:
+				self.bestll = logl
+				self.threshold = tnode
+				self.num_spe = curr_spe
+				curr_spe = curr_spe + 1
+		return self.num_spe
 
 
 if __name__ == "__main__":
-        if len(sys.argv) != 6: 
-            print("usage: ./ncbi_taxonomy.py <tree_of_life.tre> <id_name.txt> <id_rank.txt> <name_tax.txt> <outputfile>")
-            sys.exit()
-        t = ncbi_taxa()
-        t.init_tax_tree(sys.argv[1], sys.argv[2], sys.argv[3])
-        t.extract_sub_tax_tree(sys.argv[4], sys.argv[5])
+        #if len(sys.argv) != 6: 
+        #    print("usage: ./ncbi_taxonomy.py <tree_of_life.tre> <id_name.txt> <id_rank.txt> <name_tax.txt> <outputfile>")
+        #    sys.exit()
+        sf = species_finder("2mtree.tre")
+        num_spe = sf.search()
+        print(num_spe)
+
