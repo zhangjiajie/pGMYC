@@ -23,6 +23,7 @@ class um_tree:
 				internal_node.append(n)
 		self.nodes = internal_node
 		one_leaf = self.tree.get_farthest_node()[0]
+		one_leaf.add_feature("id", cnt+1)
 		if one_leaf.is_leaf():
 			self.nodes.append(one_leaf)
 		self.nodes.sort(key=self.__compare_node)
@@ -33,7 +34,7 @@ class um_tree:
 	def __compare_node(self, node):
 		return node.age
 		
-	def get_waiting_times(threshold_node):
+	def get_waiting_times(self, threshold_node):
 		wt_list = []
 		reach_t = False
 		curr_age = 0.0
@@ -41,26 +42,33 @@ class um_tree:
 		curr_num_coa = 0
 		num_spe = -1
 		coa_roots = []
+		cnt = 1 
 		
 		for node in self.nodes:
 			wt = None
 			if reach_t:
 				fnode = node.up
 				coa_root = None
-				while not fnode.is_root:
+				#print(fnode.is_root())
+				while not fnode.is_root():
 					for coa_r in coa_roots:
+						#print (coa_r.id)
 						if coa_r.id == fnode.id:
 							coa_root = coa_r
 							break
 					if coa_root!=None:
+						#print("Find coa root")
 						break
 					else:
 						fnode = fnode.up
+				
 				if coa_root == None: #here can be modified to use multiple T
 					times = node.age - curr_age
 					curr_age = node.age
+					#print("New coa node")
+					#print(curr_spe)
 					assert curr_spe >=0
-					wt = GMYC.waiting_time(length = time, num_coas =curr_num_coa, num_lines = curr_spe)
+					wt = GMYC.waiting_time(length = times, num_coas =curr_num_coa, num_lines = curr_spe)
 					for coa_r in coa_roots:
 						coa = GMYC.coalescent(num_individual = coa_r.curr_n)
 						wt.coas.add_coalescent(coa)
@@ -73,7 +81,7 @@ class um_tree:
 					times = node.age - curr_age
 					curr_age = node.age
 					assert curr_spe >=0
-					wt = GMYC.waiting_time(length = time, num_coas =curr_num_coa, num_lines = curr_spe)
+					wt = GMYC.waiting_time(length = times, num_coas =curr_num_coa, num_lines = curr_spe)
 					for coa_r in coa_roots:
 						coa = GMYC.coalescent(num_individual = coa_r.curr_n)
 						wt.coas.add_coalescent(coa)
@@ -87,8 +95,11 @@ class um_tree:
 					num_spe = curr_spe
 					times = node.age - curr_age
 					curr_age = node.age
+					#print("find T")
+					#print(curr_spe)
+					#print(times)
 					assert curr_spe >=0
-					wt = GMYC.waiting_time(length = time, num_coas = 0, num_lines = curr_spe)
+					wt = GMYC.waiting_time(length = times, num_coas = 0, num_lines = curr_spe)
 					curr_spe = curr_spe - 1
 					curr_num_coa = curr_num_coa + 1
 					node.add_feature("curr_n", 2)
@@ -97,20 +108,22 @@ class um_tree:
 					times = node.age - curr_age
 					curr_age = node.age
 					assert curr_spe >=0
-					wt = GMYC.waiting_time(length = time, num_coas = 0, num_lines = curr_spe)
+					wt = GMYC.waiting_time(length = times, num_coas = 0, num_lines = curr_spe)
 					curr_spe = curr_spe + 1
 					
 			wt_list.append(wt)
-		return wt_list	
-		
-			
-			
-	
-	
-	
+			print("No.spe:" + repr(wt.spe.num_lineages))
+			print("No.coa:" + repr(wt.coas.num_coa))
+			print("time:" + repr(wt.length))
+			print(wt.coas)
+		return wt_list, num_spe	
+
+
 if __name__ == "__main__":
 	print("main function")
-	#t = Tree("2mtree.tre", format = 1)
+	t = Tree("test.tree.tre", format = 1)
+	print(t)
+	t.show()
 	#lvs = t.get_leaves()
 	#for leaf in lvs:
 		 #print (leaf.get_distance(t))
@@ -119,4 +132,4 @@ if __name__ == "__main__":
 	#for n in nodes:
 	#	print (n.dist)
 	#print t.dist
-	ut =um_tree(tree = "2mtree.tre")
+	#ut =um_tree(tree = "2mtree.tre")

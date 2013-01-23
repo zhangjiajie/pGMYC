@@ -4,6 +4,8 @@ import os
 import json
 import operator
 import Ultrametric_tree
+import math
+import random
 from ete2 import Tree, TreeStyle, TextFace, SeqGroup
 from subprocess import call
 
@@ -77,7 +79,14 @@ class coalescents:
 		self.p = p
 		self.const_rate = const_rate
 		self.const_p = const_p
-		
+	
+	def __str__(self):
+		s = ""
+		cnt = 1
+		for coa in self.coa_list:
+			s = s + "coa_event" + repr(cnt) + ": "+repr(coa.num_individual) + "\n" 
+		return s
+	
 	def add_coalescent(self,coa):
 		if self.const_rate:
 			coa.rate = self.rate 
@@ -128,7 +137,7 @@ class optimization:
 	def __init__(self, range_a, range_b, step = 0.001):
 		self.range_a = range_a
 		self.range_b = range_b
-		self.max_val = 0 
+		self.max_val = float("-inf") 
 		self.max_x = range_a
 		self.step = step
 		self.curr_x = range_a
@@ -139,7 +148,7 @@ class optimization:
 			self.max_val = curr_val
 			self.max_x = self.curr_x
 		
-		self.curr_x = self.curr_x + step
+		self.curr_x = self.curr_x + self.step
 		if self.curr_x > self.range_b:
 			return False, self.curr_x
 		else:
@@ -150,15 +159,15 @@ class tree_time:
 	def __init__(self, wtimes, step = 0.01, maxiters = 100):
 		self.w_time_list = wtimes
 		self.llh = 0
-		self.spe_rate = 0.1
+		self.spe_rate = random.random()
 		self.spe_p = 1
-		self.coa_rate = 0.1
+		self.coa_rate = random.random()
 		self.coa_p = 1 
 		self.step = step
 		self.maxiters = maxiters
 	
 	def sum_llh(self):
-		for w_time in w_time_list:
+		for w_time in self.w_time_list:
 			self.llh = self.llh + w_time.logl()
 		return self.llh
 	
@@ -168,12 +177,13 @@ class tree_time:
 
 	
 	def optimize_spe_rate(self):
-		optim = optimization(range_a = 0, range_b = 2, step = self.step)
+		optim = optimization(range_a = 0, range_b = 6, step = self.step)
 		opt_flag = True
 		next_sp_rate = 0
 		while opt_flag:
 			self.update(next_sp_rate, self.spe_p, self.coa_rate, self.coa_p)
 			val = self.sum_llh()
+			#print(val)
 			opt_flag, next_sp_rate = optim.next_search(val)
 		self.spe_rate = optim.max_x
 		return optim.max_val
@@ -211,9 +221,9 @@ class tree_time:
 		self.coa_p = optim.max_x
 		return optim.max_val
 	
-	def optimize_all(self, min_change = 0.1):
-		change = 1.0
-		last_val = 0 
+	def optimize_all(self, min_change = 100):
+		change = 100000000.0
+		last_val = -99999999999
 		cnt = 0
 		while change > min_change and cnt < self.maxiters:
 			self.optimize_spe_rate()
@@ -231,21 +241,29 @@ class tree_time:
 class species_finder:
 	def __init__(self, tree_file):
 		self.utree = Ultrametric_tree.um_tree(tree_file)
-		self.bestll = -999999999
+		self.bestll = float("-inf")
 		self.threshold = None
 		self.num_spe = 2
 	
 	def search(self):
 		curr_spe = 2
 		for tnode in self.utree.nodes:
-			wtimes = self.utree.get_waiting_times(tnode)
+			print("Next node ----------------------------------------------")
+			wtimes, numspe= self.utree.get_waiting_times(tnode)
+			#break
 			tt = tree_time(wtimes)
 			logl = tt.optimize_all(min_change = 1)
+			print(logl)
+			print(numspe)
+			print(self.num_spe)
+			print(tt.coa_p)
+			print(tt.coa_p)
+			print(tt.spe_rate)
 			if logl > self.bestll:
 				self.bestll = logl
 				self.threshold = tnode
-				self.num_spe = curr_spe
-				curr_spe = curr_spe + 1
+				self.num_spe = numspe
+				#curr_spe = curr_spe + 1
 		return self.num_spe
 
 
@@ -253,7 +271,8 @@ if __name__ == "__main__":
         #if len(sys.argv) != 6: 
         #    print("usage: ./ncbi_taxonomy.py <tree_of_life.tre> <id_name.txt> <id_rank.txt> <name_tax.txt> <outputfile>")
         #    sys.exit()
-        sf = species_finder("2mtree.tre")
+        sf = species_finder("test.tree.tre")
         num_spe = sf.search()
+        #print("Final No. Spe" )
         print(num_spe)
 
