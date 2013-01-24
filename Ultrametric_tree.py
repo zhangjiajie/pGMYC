@@ -27,9 +27,6 @@ class um_tree:
 		if one_leaf.is_leaf():
 			self.nodes.append(one_leaf)
 		self.nodes.sort(key=self.__compare_node)
-		#for n in self.nodes:
-		#	print(repr(n.age) + "	"+ repr(n.is_leaf()))
-		
 		
 	def __compare_node(self, node):
 		return node.age
@@ -40,9 +37,7 @@ class um_tree:
 		curr_age = 0.0
 		curr_spe = 2
 		curr_num_coa = 0
-		num_spe = -1
 		coa_roots = []
-		cnt = 1 
 		min_brl = 1000
 		
 		if threshold_node == None:
@@ -85,7 +80,6 @@ class um_tree:
 				else:
 					if node.id == threshold_node.id:
 						reach_t = True
-						#num_spe = curr_spe
 						wt = GMYC.waiting_time(length = times, num_coas = 0, num_lines = curr_spe)
 						curr_spe = curr_spe - 1
 						curr_num_coa = curr_num_coa + 1
@@ -94,7 +88,7 @@ class um_tree:
 					else:
 						wt = GMYC.waiting_time(length = times, num_coas = 0, num_lines = curr_spe)
 						curr_spe = curr_spe + 1
-				if times > 0:		
+				if times > 0:
 					wt_list.append(wt)
 		
 		if min_brl < 0.0001:
@@ -102,7 +96,7 @@ class um_tree:
 		
 		for wt in wt_list:
 			wt.length = wt.length/min_brl
-			print(wt)
+			#print(wt)
 		
 		return wt_list
 

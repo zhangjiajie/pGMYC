@@ -62,7 +62,7 @@ class speciation:
 		self.p = spe_p
 	
 	def getBirthRate(self): # this is b
-		return self.rate * self.num_lineages
+		return self.rate * math.pow (self.num_lineages, self.p)
 
 
 class coalescent:
@@ -72,7 +72,7 @@ class coalescent:
 		 self.p = p
 	
 	def getCoalesecntRate(self):
-		return self.rate * self.num_individual * (self.num_individual - 1)
+		return self.rate * math.pow(self.num_individual * (self.num_individual - 1), self.p)
 
 
 class coalescents:
@@ -100,14 +100,10 @@ class coalescents:
 		self.coa_list.append(coa)
 		
 	def getSumCoaRate(self): #this is b
-		if self.num_coa == len(self.coa_list):
-			sr = 0
-			for coa in self.coa_list:
-				sr = sr + coa.getCoalesecntRate()
-			return sr
-		else:
-			print("Coalescents events are not proper init")
-			return None
+		sr = 0
+		for coa in self.coa_list:
+			sr = sr + coa.getCoalesecntRate()
+		return sr
 	
 	def update(self, rate = 0, p = 1):
 		for coa in self.coa_list:
@@ -122,7 +118,7 @@ class waiting_time:
 		self.length = length #x
 		self.spe = speciation(num_lineage = num_lines)
 		self.coas  =  coalescents(num_coalescent = num_coas)
-		self.b = 0.0
+		self.b = self.spe.getBirthRate() + self.coas.getSumCoaRate()
 	
 	def __str__(self):
 		s = "Waitting time = " + repr(self.length) + "\n"
@@ -137,16 +133,22 @@ class waiting_time:
 		self.b = self.spe.getBirthRate() + self.coas.getSumCoaRate() 
 	
 	def logl(self):
-		self.b = self.spe.getBirthRate() + self.coas.getSumCoaRate() 
+		self.b = self.spe.getBirthRate() + self.coas.getSumCoaRate()
 		prob = self.b * math.exp (-1.0 * self.b * self.length)
+		#print("b")
+		#print(self.b)
+		#print("L")
+		#print(self.length)
+		#print("prob")
+		#print(prob)
 		if prob <=0:
-			return None
+			return 0
 		else:
 			return math.log(prob)
 
 
 class optimization:
-	def __init__(self, range_a, range_b, step = 0.001):
+	def __init__(self, range_a, range_b, step = 1):
 		self.range_a = range_a
 		self.range_b = range_b
 		self.max_val = float("-inf") 
@@ -179,6 +181,7 @@ class tree_time:
 		self.maxiters = maxiters
 	
 	def sum_llh(self):
+		self.llh = 0.0
 		for w_time in self.w_time_list:
 			self.llh = self.llh + w_time.logl()
 		return self.llh
@@ -189,14 +192,14 @@ class tree_time:
 
 	
 	def optimize_spe_rate(self):
-		optim = optimization(range_a = 0, range_b = 1000, step = self.step)
+		optim = optimization(range_a = 0, range_b = 1, step = self.step)
 		opt_flag = True
 		next_sp_rate = 0
 		while opt_flag:
 			self.update(next_sp_rate, self.spe_p, self.coa_rate, self.coa_p)
 			val = self.sum_llh()
-			#print(val)
 			opt_flag, next_sp_rate = optim.next_search(val)
+			print(repr(val) + " " + repr(optim.curr_x)  )
 		self.spe_rate = optim.max_x
 		return optim.max_val
 	
@@ -212,7 +215,7 @@ class tree_time:
 		return optim.max_val
 		
 	def optimize_coa_rate(self):
-		optim = optimization(range_a = 0, range_b = 1000, step = self.step)
+		optim = optimization(range_a = 0, range_b = 1, step = self.step)
 		opt_flag = True
 		next_coa_rate = 0
 		while opt_flag:
@@ -233,21 +236,24 @@ class tree_time:
 		self.coa_p = optim.max_x
 		return optim.max_val
 	
-	def optimize_all(self, min_change = 100):
+	def optimize_all(self, min_change = 1):
 		change = 100000000.0
-		last_val = -99999999999
+		last_val = -999999999999999
 		cnt = 0
-		while change > min_change and cnt < self.maxiters:
+		#while change > min_change and cnt < self.maxiters:
+		while cnt < self.maxiters:
 			self.optimize_spe_rate()
 			self.optimize_coa_rate()
-			self.optimize_spe_p()
-			curr_val = self.optimize_coa_p()
-			change = curr_val - last_val
-			last_val = curr_val
+			#curr_val = self.optimize_spe_p()
+			#curr_val = self.optimize_coa_p()
+			#change = curr_val - last_val
+			#print(change)
+			print(self.sum_llh())
+			#last_val = curr_val
 			cnt = cnt + 1
 		
-		self.llh = last_val
-		return last_val
+		#self.llh = last_val
+		#return last_val
 
 
 class species_finder:
@@ -283,10 +289,15 @@ if __name__ == "__main__":
         #if len(sys.argv) != 6: 
         #    print("usage: ./ncbi_taxonomy.py <tree_of_life.tre> <id_name.txt> <id_rank.txt> <name_tax.txt> <outputfile>")
         #    sys.exit() 2mtree.tre
-        sf = species_finder("2mtree.tre")
+        #sf = species_finder("2mtree.tre")
         #sf = species_finder("test.tree.tre")
-        num_spe = sf.search()
-        print("Final No. Spe" )
-        print(num_spe)
+        
+        #num_spe = sf.search()
+        #print("Final No. Spe" )
+        #print(num_spe)
+        utree = Ultrametric_tree.um_tree("test.tree.tre")
+        wt_list = utree.get_waiting_times(threshold_node_idx = 0)
+        his = tree_time(wt_list, step = 0.01)
+        his.optimize_all()
 
 
