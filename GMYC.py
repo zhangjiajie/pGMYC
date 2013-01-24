@@ -47,12 +47,16 @@ class exp_distribution:
 
 
 class speciation:
-	def __init__(self, num_lineage, rate = 0 , p = 1):
-		self.length = 0 #x
+	def __init__(self, num_lineage, rate = 0 , p = 1.0):
+		#self.length = 0 #x
 		self.num_lineages = num_lineage #n
 		self.rate = rate #speciation rate 
 		self.p = p
 		
+	def __str__(self):
+		s = "spe_event with n=" + repr(self.num_lineages) +  ", rate= " + repr(self.rate) + "\n" 
+		return s
+	
 	def update(self,spe_rate, spe_p):
 		self.rate = spe_rate
 		self.p = spe_p
@@ -84,7 +88,8 @@ class coalescents:
 		s = ""
 		cnt = 1
 		for coa in self.coa_list:
-			s = s + "coa_event" + repr(cnt) + ": "+repr(coa.num_individual) + "\n" 
+			s = s + "coa_event" + repr(cnt) + ", with n= "+repr(coa.num_individual) + ", rate="+ repr(coa.rate)+ "\n" 
+			cnt = cnt + 1
 		return s
 	
 	def add_coalescent(self,coa):
@@ -119,6 +124,13 @@ class waiting_time:
 		self.coas  =  coalescents(num_coalescent = num_coas)
 		self.b = 0.0
 	
+	def __str__(self):
+		s = "Waitting time = " + repr(self.length) + "\n"
+		s = s + str(self.spe) + "\n"
+		s = s + str(self.coas) + "\n"
+		s = s + "---------------------------------------------------------\n"
+		return s 
+	
 	def update(self, sp_rate, sp_p, coa_rate, coa_p):
 		self.spe.update(sp_rate, sp_p)
 		self.coas.update(coa_rate, coa_p)
@@ -128,7 +140,7 @@ class waiting_time:
 		self.b = self.spe.getBirthRate() + self.coas.getSumCoaRate() 
 		prob = self.b * math.exp (-1.0 * self.b * self.length)
 		if prob <=0:
-			return -99999999999
+			return None
 		else:
 			return math.log(prob)
 
@@ -156,7 +168,7 @@ class optimization:
 
 
 class tree_time:
-	def __init__(self, wtimes, step = 0.01, maxiters = 100):
+	def __init__(self, wtimes, step = 1, maxiters = 100):
 		self.w_time_list = wtimes
 		self.llh = 0
 		self.spe_rate = random.random()
@@ -177,7 +189,7 @@ class tree_time:
 
 	
 	def optimize_spe_rate(self):
-		optim = optimization(range_a = 0, range_b = 6, step = self.step)
+		optim = optimization(range_a = 0, range_b = 1000, step = self.step)
 		opt_flag = True
 		next_sp_rate = 0
 		while opt_flag:
@@ -189,7 +201,7 @@ class tree_time:
 		return optim.max_val
 	
 	def optimize_spe_p(self):
-		optim = optimization(range_a = 0, range_b = 2, step = self.step)
+		optim = optimization(range_a = 0, range_b = 1000, step = self.step)
 		opt_flag = True
 		next_sp_p = 0
 		while opt_flag:
@@ -200,7 +212,7 @@ class tree_time:
 		return optim.max_val
 		
 	def optimize_coa_rate(self):
-		optim = optimization(range_a = 0, range_b = 1, step = self.step)
+		optim = optimization(range_a = 0, range_b = 1000, step = self.step)
 		opt_flag = True
 		next_coa_rate = 0
 		while opt_flag:
@@ -211,7 +223,7 @@ class tree_time:
 		return optim.max_val
 	
 	def optimize_coa_p(self):
-		optim = optimization(range_a = 0, range_b = 2, step = self.step)
+		optim = optimization(range_a = 0, range_b = 1000, step = self.step)
 		opt_flag = True
 		next_coa_p = 0
 		while opt_flag:
@@ -270,9 +282,11 @@ class species_finder:
 if __name__ == "__main__":
         #if len(sys.argv) != 6: 
         #    print("usage: ./ncbi_taxonomy.py <tree_of_life.tre> <id_name.txt> <id_rank.txt> <name_tax.txt> <outputfile>")
-        #    sys.exit()
-        sf = species_finder("test.tree.tre")
+        #    sys.exit() 2mtree.tre
+        sf = species_finder("2mtree.tre")
+        #sf = species_finder("test.tree.tre")
         num_spe = sf.search()
-        #print("Final No. Spe" )
+        print("Final No. Spe" )
         print(num_spe)
+
 
