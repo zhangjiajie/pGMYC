@@ -8,6 +8,8 @@ import math
 import random
 from ete2 import Tree, TreeStyle, TextFace, SeqGroup
 from subprocess import call
+#import scipy
+from scipy.optimize import fmin
 
 class exp_distribution:
     def __init__(self):
@@ -119,6 +121,12 @@ class waiting_time:
 		self.spe = speciation(num_lineage = num_lines)
 		self.coas  =  coalescents(num_coalescent = num_coas)
 		self.b = self.spe.getBirthRate() + self.coas.getSumCoaRate()
+		self.spe_rate = 0
+		self.spe_p = 0
+		self.spe_n = num_lines
+		self.coa_rate = 0
+		self.coa_p = 0
+		self.coa_n = num_coas
 	
 	def __str__(self):
 		s = "Waitting time = " + repr(self.length) + "\n"
@@ -128,6 +136,10 @@ class waiting_time:
 		return s 
 	
 	def update(self, sp_rate, sp_p, coa_rate, coa_p):
+		self.spe_rate = sp_rate 
+		self.spe_p = sp_p
+		self.coa_rate = coa_rate 
+		self.coa_p = coa_p
 		self.spe.update(sp_rate, sp_p)
 		self.coas.update(coa_rate, coa_p)
 		self.b = self.spe.getBirthRate() + self.coas.getSumCoaRate() 
@@ -142,9 +154,17 @@ class waiting_time:
 		#print("prob")
 		#print(prob)
 		if prob <=0:
-			return 0
+			return None
 		else:
 			return math.log(prob)
+			
+	def spe_rate_deriv1(self):
+		deriv1 = self.b * math.exp (-1.0 * self.b * self.length) * (-1.0) * math.pow(self.spe_n, self.spe_p)
+		return deriv1
+	
+	def spe_rate_deriv2(self):
+		deriv2 = self.b * math.exp (-1.0 * self.b * self.length) * math.pow(self.spe_n, self.spe_p * 2.0)
+		return deriv2 
 
 
 class optimization:
@@ -155,6 +175,9 @@ class optimization:
 		self.max_x = range_a
 		self.step = step
 		self.curr_x = range_a
+		self.last_val = float("-inf") 
+		self.cont_incease = True
+		
 	
 	def next_search(self, curr_val):
 		#self.curr_x = self.curr_x + step
@@ -167,29 +190,48 @@ class optimization:
 			return False, self.curr_x
 		else:
 			return True, self.curr_x
+			
+	def next_newton(self, curr_val, d1_d2):
+		pass
+		
 
+def tar_fun(x, *args):
+	spe_rate = x[0]
+	spe_p = x[1]
+	coa_rate = x[2]
+	coa_p = x[3]
+	args[0].update(spe_rate, spe_p, coa_rate, coa_p)
+	return args[0].sum_llh()
 
 class tree_time:
 	def __init__(self, wtimes, step = 1, maxiters = 100):
 		self.w_time_list = wtimes
 		self.llh = 0
-		self.spe_rate = random.random()
+		#self.spe_rate = random.random()
+		self.spe_rate = 0.001
 		self.spe_p = 1
-		self.coa_rate = random.random()
+		#self.coa_rate = random.random()
+		self.coa_rate = 0.001
 		self.coa_p = 1 
 		self.step = step
 		self.maxiters = maxiters
 	
+	def show(self):
+		print("This is tree_time") 
+	
 	def sum_llh(self):
 		self.llh = 0.0
 		for w_time in self.w_time_list:
-			self.llh = self.llh + w_time.logl()
+			if w_time.logl() == None:
+				self.llh = -sys.float_info.max
+				break
+			else:
+				self.llh = self.llh + w_time.logl()
 		return self.llh
 	
 	def update(self, spe_rate, spe_p, coa_rate, coa_p):
 		for w_time in self.w_time_list:
 			w_time.update(spe_rate, spe_p, coa_rate, coa_p)
-
 	
 	def optimize_spe_rate(self):
 		optim = optimization(range_a = 0, range_b = 1, step = self.step)
@@ -199,12 +241,12 @@ class tree_time:
 			self.update(next_sp_rate, self.spe_p, self.coa_rate, self.coa_p)
 			val = self.sum_llh()
 			opt_flag, next_sp_rate = optim.next_search(val)
-			print(repr(val) + " " + repr(optim.curr_x)  )
 		self.spe_rate = optim.max_x
+		self.update(self.spe_rate, self.spe_p, self.coa_rate, self.coa_p)
 		return optim.max_val
 	
 	def optimize_spe_p(self):
-		optim = optimization(range_a = 0, range_b = 1000, step = self.step)
+		optim = optimization(range_a = 0.01, range_b = 10, step = self.step)
 		opt_flag = True
 		next_sp_p = 0
 		while opt_flag:
@@ -212,6 +254,7 @@ class tree_time:
 			val = self.sum_llh()
 			opt_flag, next_sp_p = optim.next_search(val)
 		self.spe_p = optim.max_x
+		self.update(self.spe_rate, self.spe_p, self.coa_rate, self.coa_p)
 		return optim.max_val
 		
 	def optimize_coa_rate(self):
@@ -223,10 +266,11 @@ class tree_time:
 			val = self.sum_llh()
 			opt_flag, next_coa_rate = optim.next_search(val)
 		self.coa_rate = optim.max_x
+		self.update(self.spe_rate, self.spe_p, self.coa_rate, self.coa_p)
 		return optim.max_val
 	
 	def optimize_coa_p(self):
-		optim = optimization(range_a = 0, range_b = 1000, step = self.step)
+		optim = optimization(range_a = 0.01, range_b = 10, step = self.step)
 		opt_flag = True
 		next_coa_p = 0
 		while opt_flag:
@@ -234,26 +278,24 @@ class tree_time:
 			val = self.sum_llh()
 			opt_flag, next_coa_p = optim.next_search(val)
 		self.coa_p = optim.max_x
+		self.update(self.spe_rate, self.spe_p, self.coa_rate, self.coa_p)
 		return optim.max_val
 	
 	def optimize_all(self, min_change = 1):
 		change = 100000000.0
 		last_val = -999999999999999
 		cnt = 0
-		#while change > min_change and cnt < self.maxiters:
-		while cnt < self.maxiters:
+		while cnt < self.maxiters and change > min_change:
 			self.optimize_spe_rate()
 			self.optimize_coa_rate()
-			#curr_val = self.optimize_spe_p()
-			#curr_val = self.optimize_coa_p()
-			#change = curr_val - last_val
-			#print(change)
-			print(self.sum_llh())
-			#last_val = curr_val
+			self.optimize_spe_p()
+			self.optimize_coa_p()
+			#print("highest llh:" + repr(self.sum_llh()) + ", with spe_rate = " + repr(self.spe_rate) + " coa_rate = " + repr(self.coa_rate))
+			change = abs(self.sum_llh() - last_val)
+			last_val = self.sum_llh()
 			cnt = cnt + 1
-		
-		#self.llh = last_val
-		#return last_val
+		self.llh = last_val
+		return self.llh
 
 
 class species_finder:
@@ -267,21 +309,23 @@ class species_finder:
 		curr_spe = 2
 		for tnode in self.utree.nodes:
 			print("Next node ----------------------------------------------")
-			wtimes, numspe= self.utree.get_waiting_times(tnode)
-			#break
-			tt = tree_time(wtimes)
-			logl = tt.optimize_all(min_change = 1)
-			print(logl)
-			print(numspe)
-			print(self.num_spe)
-			print(tt.coa_p)
-			print(tt.coa_p)
-			print(tt.spe_rate)
-			if logl > self.bestll:
-				self.bestll = logl
+			wtimes, numspe= self.utree.get_waiting_times(threshold_node = tnode)
+			tt = tree_time(wtimes, step = 0.001)
+			llh = tt.optimize_all(min_change = 0.01)
+
+			#print(tt.coa_p)
+			#print(tt.coa_p)
+			#print(tt.spe_rate)
+			if llh > self.bestll:
+				self.bestll = llh
 				self.threshold = tnode
 				self.num_spe = numspe
 				#curr_spe = curr_spe + 1
+			print(llh)
+			#print(numspe)
+			print(self.num_spe)
+			print(tt.spe_rate)
+			print(tt.coa_rate)
 		return self.num_spe
 
 
@@ -296,8 +340,10 @@ if __name__ == "__main__":
         #print("Final No. Spe" )
         #print(num_spe)
         utree = Ultrametric_tree.um_tree("test.tree.tre")
-        wt_list = utree.get_waiting_times(threshold_node_idx = 0)
-        his = tree_time(wt_list, step = 0.01)
-        his.optimize_all()
+        wt_list, num_spe = utree.get_waiting_times(threshold_node_idx = 0)
+        his = tree_time(wt_list)
+        #his.optimize_all()
+        val = fmin(tar_fun, [0.01, 0.01, 0.01, 0.01], [his,1])
+        print(val)
 
 

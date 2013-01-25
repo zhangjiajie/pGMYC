@@ -39,6 +39,7 @@ class um_tree:
 		curr_num_coa = 0
 		coa_roots = []
 		min_brl = 1000
+		num_spe = -1
 		
 		if threshold_node == None:
 			threshold_node = self.nodes[threshold_node_idx]
@@ -81,6 +82,7 @@ class um_tree:
 					if node.id == threshold_node.id:
 						reach_t = True
 						wt = GMYC.waiting_time(length = times, num_coas = 0, num_lines = curr_spe)
+						num_spe = curr_spe
 						curr_spe = curr_spe - 1
 						curr_num_coa = curr_num_coa + 1
 						node.add_feature("curr_n", 2)
@@ -95,10 +97,11 @@ class um_tree:
 			min_brl = 0.0001
 		
 		for wt in wt_list:
-			wt.length = wt.length/min_brl
+			pass
+			#wt.length = wt.length/min_brl
 			#print(wt)
 		
-		return wt_list
+		return wt_list, num_spe
 
 
 if __name__ == "__main__":
@@ -116,15 +119,21 @@ if __name__ == "__main__":
 	#print t.dist
 	ut =um_tree(tree = "test.tree.tre")
 	#ut =um_tree(tree = "2mtree.tre")
-	ut.get_waiting_times(threshold_node_idx = 0)
+	wl, n = ut.get_waiting_times(threshold_node_idx = 0)
+	print(n)
 	print("@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@")
-	ut.get_waiting_times(threshold_node_idx = 1)
+	wl, n = ut.get_waiting_times(threshold_node_idx = 1)
+	print(n)
 	print("@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@")
-	ut.get_waiting_times(threshold_node_idx = 2)
+	wl, n = ut.get_waiting_times(threshold_node_idx = 2)
+	print(n)
 	print("@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@")
-	ut.get_waiting_times(threshold_node_idx = 3)
+	wl, n = ut.get_waiting_times(threshold_node_idx = 3)
+	print(n)
 	print("@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@")
-	ut.get_waiting_times(threshold_node_idx = 4)
+	wl, n = ut.get_waiting_times(threshold_node_idx = 4)
+	print(n)
 	print("@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@")
-	ut.get_waiting_times(threshold_node_idx = 5)
+	wl, n = ut.get_waiting_times(threshold_node_idx = 5)
+	print(n)
 	print("@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@")
