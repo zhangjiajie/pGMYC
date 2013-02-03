@@ -63,8 +63,20 @@ class speciation:
 		self.rate = spe_rate
 		self.p = spe_p
 	
+	def update_p(self, spe_p):
+		self.p = spe_p
+	
+	def update_rate(self, spe_rate):
+		self.rate = spe_rate
+	
 	def getBirthRate(self): # this is b
-		return self.rate * math.pow (self.num_lineages, self.p)
+		if self.num_lineages == 0:
+			return 0
+		else:
+			return self.rate * math.pow(self.num_lineages, self.p)
+		
+	def getNumDivEvent(self):
+		return self.num_lineages-1
 
 
 class coalescent:
@@ -75,6 +87,9 @@ class coalescent:
 	
 	def getCoalesecntRate(self):
 		return self.rate * math.pow(self.num_individual * (self.num_individual - 1), self.p)
+		
+	def getNumDivEvent(self):
+		return self.num_individual - 1 
 
 
 class coalescents:
@@ -113,6 +128,22 @@ class coalescents:
 				coa.rate = rate
 			if self.const_p:
 				coa.p = p
+	
+	def update_p(self, p):
+		for coa in self.coa_list:
+			if self.const_p:
+				coa.p = p
+	
+	def update_rate(self, rate):
+		for coa in self.coa_list:
+			if self.const_rate:
+				coa.rate = rate	
+				
+	def getNumDivEvent(self):
+		ndiv = 0
+		for coa in self.coa_list:
+			ndiv = ndiv + coa.getNumDivEvent()
+		return ndiv
 
 
 class waiting_time:
@@ -122,10 +153,10 @@ class waiting_time:
 		self.coas  =  coalescents(num_coalescent = num_coas)
 		self.b = self.spe.getBirthRate() + self.coas.getSumCoaRate()
 		self.spe_rate = 0
-		self.spe_p = 0
+		self.spe_p = 1
 		self.spe_n = num_lines
 		self.coa_rate = 0
-		self.coa_p = 0
+		self.coa_p = 1
 		self.coa_n = num_coas
 	
 	def __str__(self):
@@ -144,19 +175,35 @@ class waiting_time:
 		self.coas.update(coa_rate, coa_p)
 		self.b = self.spe.getBirthRate() + self.coas.getSumCoaRate() 
 	
+	def update_p(self, sp_p, coa_p):
+		self.spe_p = sp_p
+		self.coa_p = coa_p
+		self.spe.update_p(sp_p)
+		self.coas.update_p(coa_p)
+	
+	def update_rate(self, sp_rate, coa_rate):
+		self.spe_rate = sp_rate 
+		self.coa_rate = coa_rate 
+		self.spe.update_rate(sp_rate)
+		self.coas.update_rate(coa_rate)
+	
 	def logl(self):
 		self.b = self.spe.getBirthRate() + self.coas.getSumCoaRate()
 		prob = self.b * math.exp (-1.0 * self.b * self.length)
-		#print("b")
-		#print(self.b)
-		#print("L")
-		#print(self.length)
-		#print("prob")
-		#print(prob)
 		if prob <=0:
 			return None
 		else:
 			return math.log(prob)
+	
+	def scaleSpeBranchL(self):
+		return math.pow(self.spe_n, self.spe_p) * self.length
+	
+	def scaleCoaBranchL(self):
+		br = 0
+		for coa in self.coas.coa_list:
+			br = br + math.pow (coa.num_individual * (coa.num_individual-1), coa.p) * self.length 
+		print("br:" + repr(br))
+		return br
 			
 	def spe_rate_deriv1(self):
 		deriv1 = self.b * math.exp (-1.0 * self.b * self.length) * (-1.0) * math.pow(self.spe_n, self.spe_p)
@@ -193,18 +240,17 @@ class optimization:
 			
 	def next_newton(self, curr_val, d1_d2):
 		pass
-		
+
 
 def tar_fun(x, *args):
-	spe_rate = x[0]
-	spe_p = x[1]
-	coa_rate = x[2]
-	coa_p = x[3]
-	args[0].update(spe_rate, spe_p, coa_rate, coa_p)
-	return args[0].sum_llh()
+	spe_p = x[0]
+	coa_p = x[1]
+	args[0].update(spe_p, coa_p)
+	return -args[0].sum_llh()
+
 
 class tree_time:
-	def __init__(self, wtimes, step = 1, maxiters = 100):
+	def __init__(self, wtimes, num_spe = 1, step = 1, maxiters = 100):
 		self.w_time_list = wtimes
 		self.llh = 0
 		#self.spe_rate = random.random()
@@ -215,7 +261,13 @@ class tree_time:
 		self.coa_p = 1 
 		self.step = step
 		self.maxiters = maxiters
-	
+		self.num_species = num_spe
+		self.numSpeEvent = self.num_species - 1
+		last_wc = self.w_time_list[-1]
+		self.numCoaEvent = 0
+		for coa in last_wc.coas.coa_list:
+			self.numCoaEvent = self.numCoaEvent + coa.getNumDivEvent()
+		
 	def show(self):
 		print("This is tree_time") 
 	
@@ -229,73 +281,29 @@ class tree_time:
 				self.llh = self.llh + w_time.logl()
 		return self.llh
 	
-	def update(self, spe_rate, spe_p, coa_rate, coa_p):
+	def update(self, spe_p, coa_p):
 		for w_time in self.w_time_list:
-			w_time.update(spe_rate, spe_p, coa_rate, coa_p)
-	
-	def optimize_spe_rate(self):
-		optim = optimization(range_a = 0, range_b = 1, step = self.step)
-		opt_flag = True
-		next_sp_rate = 0
-		while opt_flag:
-			self.update(next_sp_rate, self.spe_p, self.coa_rate, self.coa_p)
-			val = self.sum_llh()
-			opt_flag, next_sp_rate = optim.next_search(val)
-		self.spe_rate = optim.max_x
-		self.update(self.spe_rate, self.spe_p, self.coa_rate, self.coa_p)
-		return optim.max_val
-	
-	def optimize_spe_p(self):
-		optim = optimization(range_a = 0.01, range_b = 10, step = self.step)
-		opt_flag = True
-		next_sp_p = 0
-		while opt_flag:
-			self.update(self.spe_rate, next_sp_p, self.coa_rate, self.coa_p)
-			val = self.sum_llh()
-			opt_flag, next_sp_p = optim.next_search(val)
-		self.spe_p = optim.max_x
-		self.update(self.spe_rate, self.spe_p, self.coa_rate, self.coa_p)
-		return optim.max_val
+			w_time.update_p(spe_p, coa_p)
+		spe_rate_dn = 0
+		coa_rate_dn = 0 
+		for w_time in self.w_time_list:
+			spe_rate_dn = spe_rate_dn + w_time.scaleSpeBranchL()
+			coa_rate_dn = coa_rate_dn + w_time.scaleCoaBranchL()
+		if spe_rate_dn == 0:
+			self.spe_rate = 0
+		else:
+			self.spe_rate = self.numSpeEvent/spe_rate_dn
+			
+		if coa_rate_dn == 0:
+			self.coa_rate =0
+		else:
+			self.coa_rate = self.numCoaEvent/coa_rate_dn
 		
-	def optimize_coa_rate(self):
-		optim = optimization(range_a = 0, range_b = 1, step = self.step)
-		opt_flag = True
-		next_coa_rate = 0
-		while opt_flag:
-			self.update(self.spe_rate, self.spe_p, next_coa_rate, self.coa_p)
-			val = self.sum_llh()
-			opt_flag, next_coa_rate = optim.next_search(val)
-		self.coa_rate = optim.max_x
-		self.update(self.spe_rate, self.spe_p, self.coa_rate, self.coa_p)
-		return optim.max_val
-	
-	def optimize_coa_p(self):
-		optim = optimization(range_a = 0.01, range_b = 10, step = self.step)
-		opt_flag = True
-		next_coa_p = 0
-		while opt_flag:
-			self.update(self.spe_rate, self.spe_p, self.coa_rate, next_coa_p)
-			val = self.sum_llh()
-			opt_flag, next_coa_p = optim.next_search(val)
-		self.coa_p = optim.max_x
-		self.update(self.spe_rate, self.spe_p, self.coa_rate, self.coa_p)
-		return optim.max_val
-	
-	def optimize_all(self, min_change = 1):
-		change = 100000000.0
-		last_val = -999999999999999
-		cnt = 0
-		while cnt < self.maxiters and change > min_change:
-			self.optimize_spe_rate()
-			self.optimize_coa_rate()
-			self.optimize_spe_p()
-			self.optimize_coa_p()
-			#print("highest llh:" + repr(self.sum_llh()) + ", with spe_rate = " + repr(self.spe_rate) + " coa_rate = " + repr(self.coa_rate))
-			change = abs(self.sum_llh() - last_val)
-			last_val = self.sum_llh()
-			cnt = cnt + 1
-		self.llh = last_val
-		return self.llh
+		print(spe_rate_dn)
+		print(coa_rate_dn)
+		
+		for w_time in self.w_time_list:
+			w_time.update_rate(self.spe_rate, self.coa_rate)
 
 
 class species_finder:
@@ -329,6 +337,23 @@ class species_finder:
 		return self.num_spe
 
 
+def optimize_all(tree):
+	best_llh = float("-inf")
+	best_num_spe = -1
+	utree = Ultrametric_tree.um_tree(tree)
+	for tnode in utree.nodes:
+		wt_list, num_spe = utree.get_waiting_times(threshold_node = tnode)
+		tt = tree_time(wt_list)
+		para = fmin(tar_fun, [1, 1], [tt])
+		tt.update(para[0], para[1])
+		if tt.sum_llh() > best_llh:
+			best_llh = tt.sum_llh()
+			best_num_spe = num_spe
+		
+	
+	print("Highest llh:" + repr(best_llh))
+	print("Num spe:" + repr(best_num_spe))
+
 if __name__ == "__main__":
         #if len(sys.argv) != 6: 
         #    print("usage: ./ncbi_taxonomy.py <tree_of_life.tre> <id_name.txt> <id_rank.txt> <name_tax.txt> <outputfile>")
@@ -339,11 +364,13 @@ if __name__ == "__main__":
         #num_spe = sf.search()
         #print("Final No. Spe" )
         #print(num_spe)
-        utree = Ultrametric_tree.um_tree("test.tree.tre")
-        wt_list, num_spe = utree.get_waiting_times(threshold_node_idx = 0)
-        his = tree_time(wt_list)
+        #utree = Ultrametric_tree.um_tree("test.tree.tre")
+        #wt_list, num_spe = utree.get_waiting_times(threshold_node_idx = 0)
+        #his = tree_time(wt_list)
         #his.optimize_all()
-        val = fmin(tar_fun, [0.01, 0.01, 0.01, 0.01], [his,1])
-        print(val)
+        #val = fmin(tar_fun, [1,1], [his,1])
+        #print(val)
+        optimize_all("test.tree.tre")
+        #optimize_all("2mtree.tre")
 
 
