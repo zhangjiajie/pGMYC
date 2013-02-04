@@ -8,9 +8,17 @@ import math
 import random
 from ete2 import Tree, TreeStyle, TextFace, SeqGroup
 from subprocess import call
-#import scipy
 from scipy.optimize import fmin
 import collections
+from scipy import stats
+
+class lh_ratio_test:
+	def __init__(self, null_llh, llh, df):
+		self.lr = 2.0 * (llh - null_llh)
+		self.p = 1 - stats.chi2.cdf(self.lr, df)
+	
+	def get_p_value(self):
+		return self.p
 
 class exp_distribution:
 	def __init__(self, data):
@@ -40,33 +48,39 @@ class exp_distribution:
 		for br in self.data:
 			s = s + self.log_l(br)
 		return s 
-		
+
 class mix_exp:
 	def __init__(self, tree):
 		self.tree = Tree(tree, format = 1)
 		self.spe_br = []
 		self.coa_br = []
+		self.null_logl = 0
 		self.max_logl = float("-inf") 
 		self.num_spe = -1
 		self.q = collections.deque()
 		self.rate1 = None 
 		self.rate2 = None
 		self.species_list = []
+		self.min_brl = 0.0005
 	
 	def init_tree(self):
+		self.coa_br = []
 		for node in self.tree.get_descendants():
 			node.add_feature("t", "coa")
-			#print(node.dist)
+			if node.dist > self.min_brl:
+				self.coa_br.append(node.dist)
+		e1 = exp_distribution(self.coa_br)
+		self.null_logl = e1.sum_log_l()
 	
 	def set_model_data(self):
 		self.spe_br = []
 		self.coa_br = []
 		for node in self.tree.get_descendants():
 			if node.t == "coa":
-				if node.dist > 0.001:
+				if node.dist > self.min_brl:
 					self.coa_br.append(node.dist)
 			else:
-				if node.dist > 0.001:
+				if node.dist > self.min_brl:
 					self.spe_br.append(node.dist)
 		e1 = exp_distribution(self.coa_br)
 		e2 = exp_distribution(self.spe_br)
@@ -86,7 +100,7 @@ class mix_exp:
 		rootnode = node_list[0]
 		self.tree.set_outgroup(rootnode)
 	
-	def search2(self):
+	def search(self):
 		self.re_rooting()
 		
 		self.init_tree()
@@ -96,7 +110,6 @@ class mix_exp:
 		maxnode = None
 		cnt = 0
 		for node in node_list:
-			#print node.dist
 			node.add_feature("t", "spe")
 			currnode = node
 			while not node.up.is_root():
@@ -118,7 +131,6 @@ class mix_exp:
 		for node in node_list:
 			if node == maxnode:
 				node.add_feature("t", "spe")
-				#currnode = node
 				while not node.up.is_root():
 					node = node.up
 					if cnt == 0:
@@ -131,7 +143,6 @@ class mix_exp:
 				break
 			else:
 				node.add_feature("t", "spe")
-				#currnode = node
 				while not node.up.is_root():
 					node = node.up
 					if cnt == 0:
@@ -142,14 +153,12 @@ class mix_exp:
 					else:
 						node.add_feature("t", "spe")
 		self.set_model_data()
-		print(self.rate1)
-		print(self.rate2)
 		for t in self.tree.get_descendants():
 			if t.t == "spe":
 				t.add_face(TextFace("SPE"), column=0, position = "branch-right")
 		ts = TreeStyle()
 		ts.show_leaf_name = True
-		ts.scale =  120 # 120 pixels per branch length unit
+		ts.scale =  1000 # 120 pixels per branch length unit
 		#self.tree.show(tree_style=ts)		
 			
 	
@@ -171,6 +180,14 @@ class mix_exp:
 							self.species_list.append(child.get_leaves())
 				else:
 					self.species_list.append(node.get_leaves())
+		print(self.null_logl)
+		print(self.max_logl)
+		lhr = lh_ratio_test(self.null_logl, self.max_logl, 1)
+		pvalue = lhr.get_p_value()
+		print(pvalue)
+		if pvalue >= 0.05:
+			self.species_list = []
+			self.species_list.append(self.tree.get_leaves()) 
 		return len(self.species_list)
 		
 	
@@ -181,56 +198,15 @@ class mix_exp:
 			for leaf in sp:
 				print("          " + leaf.name)
 			cnt = cnt + 1
-	
-	def search(self):
-		self.init_tree()
-		#init queue
-		for node in self.tree.get_children():
-			node.add_feature("t", "spe")
-			self.q.append(node)
-		
-		curr_num_spe = 2
-		lastnode = self.tree
-		while len(self.q) > 0:
-			curr_logl = self.set_model_data()
-			print(curr_num_spe)
-			print(curr_logl)
-			if curr_logl >= self.max_logl:
-				self.max_logl = curr_logl
-				self.num_spe = curr_num_spe
-			else:
-				#lastnode.add_feature("t", "coa")
-				n1 = self.q.pop()
-				n2 = self.q.pop()
-				n1.add_feature("t", "coa")
-				n2.add_feature("t", "coa")
-				curr_num_spe = curr_num_spe - 1
-			if len(self.q) > 0:
-				nextnode = self.q.popleft()
-				if nextnode.is_leaf():
-					pass
-				else:
-					for node in nextnode.get_children():
-						node.add_feature("t", "spe")
-						self.q.append(node)
-					curr_num_spe = curr_num_spe + 1
-		print(self.num_spe)
-		print("last model")
-		print self.set_model_data()
-		for t in self.tree.get_descendants():
-			if t.t == "spe":
-				t.add_face(TextFace("SPE"), column=0, position = "branch-right")
-		ts = TreeStyle()
-		ts.show_leaf_name = True
-		ts.scale =  5000 # 120 pixels per branch length unit
-		self.tree.show(tree_style=ts)
-	
+
+
 if __name__ == "__main__":
-	me = mix_exp("2mtree.tre")
+	#me = mix_exp("2mtree.tre")
 	#me = mix_exp("test.tree.tre")
 	#me = mix_exp("p3.tre")
 	#me = mix_exp("cox1.tre")
 	#me = mix_exp("t1.tre")
-	me.search2()
+	me = mix_exp("1ms1.tre")
+	me.search()
 	print(me.count_species())
 	me.print_species()
