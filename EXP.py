@@ -27,7 +27,7 @@ class exp_distribution:
 		self.estimate_rate()
 		
 	def __str__(self):
-		return "Nothing at all"
+		return "Exponential distribution with rate = " + repr(self.rate)
 	
 	def estimate_rate(self):
 		sumbr = 0.0
@@ -158,8 +158,8 @@ class mix_exp:
 				t.add_face(TextFace("SPE"), column=0, position = "branch-right")
 		ts = TreeStyle()
 		ts.show_leaf_name = True
-		ts.scale =  1000 # 120 pixels per branch length unit
-		#self.tree.show(tree_style=ts)		
+		ts.scale =  1000 # 1000 pixels per branch length unit
+		self.tree.show(tree_style=ts)
 			
 	
 	def count_species(self):
@@ -203,10 +203,10 @@ class mix_exp:
 if __name__ == "__main__":
 	#me = mix_exp("2mtree.tre")
 	#me = mix_exp("test.tree.tre")
-	#me = mix_exp("p3.tre")
+	me = mix_exp("2m2.tre")
 	#me = mix_exp("cox1.tre")
 	#me = mix_exp("t1.tre")
-	me = mix_exp("1ms1.tre")
+	#me = mix_exp("1ms1.tre")
 	me.search()
 	print(me.count_species())
 	me.print_species()
