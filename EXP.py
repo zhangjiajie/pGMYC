@@ -111,9 +111,10 @@ class mix_exp:
 		rootnode = node_list[0]
 		self.tree.set_outgroup(rootnode)
 	
-	def search(self):
-		self.re_rooting()
-		
+	def search(self, reroot = True):
+		if reroot:
+			self.re_rooting()
+			
 		self.init_tree()
 		node_list = self.tree.get_descendants()
 		node_list.sort(key=self.__compare_node)
@@ -166,14 +167,14 @@ class mix_exp:
 		self.set_model_data()
 		
 		
-	def showTree(self):
+	def showTree(self, scale = 1000):
 		self.tree.add_face(TextFace("SPE"), column=0, position = "branch-right")
 		for t in self.tree.get_descendants():
 			if t.t == "spe":
 				t.add_face(TextFace("SPE"), column=0, position = "branch-right")
 		ts = TreeStyle()
 		ts.show_leaf_name = True
-		ts.scale =  1000 # 1000 pixels per branch length unit
+		ts.scale =  scale # scale pixels per branch length unit
 		self.tree.show(tree_style=ts)
 	
 	def count_species(self):
@@ -218,14 +219,15 @@ class mix_exp:
 
 
 if __name__ == "__main__":
-	me = mix_exp("2mtree.tre")
+	#me = mix_exp("2mtree.tre")
 	#me = mix_exp("test.tree.tre")
 	#me = mix_exp("3m.tre", sp_rate = 14.396, fix_sp_rate = True)
 	#me = mix_exp("3m.tre")
 	#me = mix_exp("cox1.tre")
-	#me = mix_exp("t1.tre")
+	me = mix_exp("t1.tre", sp_rate = 14.396, fix_sp_rate = True)
 	#me = mix_exp("1ms1.tre")
-	me.search()
+	#me = mix_exp("pime_COI_um.tre")
+	me.search(reroot = True)
 	print("Number of species:" + repr(me.count_species()))
 	me.print_species()
-	me.showTree()
+	me.showTree(scale = 1000)
