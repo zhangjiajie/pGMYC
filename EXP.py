@@ -21,10 +21,13 @@ class lh_ratio_test:
 		return self.p
 
 class exp_distribution:
-	def __init__(self, data):
+	def __init__(self, data, rate = -1):
 		self.data = data
 		self.rate = 0.0
-		self.estimate_rate()
+		if rate < 0:
+			self.estimate_rate()
+		else:
+			self.rate = rate
 		
 	def __str__(self):
 		return "Exponential distribution with rate = " + repr(self.rate)
@@ -50,8 +53,9 @@ class exp_distribution:
 		return s 
 
 class mix_exp:
-	def __init__(self, tree):
+	def __init__(self, tree, sp_rate = 0, coa_rate = 0, fix_sp_rate = False):
 		self.tree = Tree(tree, format = 1)
+		self.tree.dist = 0
 		self.spe_br = []
 		self.coa_br = []
 		self.null_logl = 0
@@ -60,6 +64,9 @@ class mix_exp:
 		self.q = collections.deque()
 		self.rate1 = None 
 		self.rate2 = None
+		self.fix_spe_rate = fix_sp_rate
+		self.fix_spe = sp_rate 
+		self.fix_coa = coa_rate
 		self.species_list = []
 		self.min_brl = 0.0005
 	
@@ -83,7 +90,11 @@ class mix_exp:
 				if node.dist > self.min_brl:
 					self.spe_br.append(node.dist)
 		e1 = exp_distribution(self.coa_br)
-		e2 = exp_distribution(self.spe_br)
+		e2 = None
+		if self.fix_spe_rate:
+			e2 = exp_distribution(self.spe_br, rate = self.fix_spe)
+		else:
+			e2 = exp_distribution(self.spe_br)
 		self.rate1 = e1.rate
 		self.rate2 = e2.rate
 		logl = e1.sum_log_l() + e2.sum_log_l()
@@ -153,6 +164,10 @@ class mix_exp:
 					else:
 						node.add_feature("t", "spe")
 		self.set_model_data()
+		
+		
+	def showTree(self):
+		self.tree.add_face(TextFace("SPE"), column=0, position = "branch-right")
 		for t in self.tree.get_descendants():
 			if t.t == "spe":
 				t.add_face(TextFace("SPE"), column=0, position = "branch-right")
@@ -160,7 +175,6 @@ class mix_exp:
 		ts.show_leaf_name = True
 		ts.scale =  1000 # 1000 pixels per branch length unit
 		self.tree.show(tree_style=ts)
-			
 	
 	def count_species(self):
 		node_list = self.tree.get_descendants()
@@ -180,14 +194,17 @@ class mix_exp:
 							self.species_list.append(child.get_leaves())
 				else:
 					self.species_list.append(node.get_leaves())
-		print(self.null_logl)
-		print(self.max_logl)
+		print("Speciation rate:" + repr(self.rate2))
+		print("Coalesecnt rate:" + repr(self.rate1))
+		print("Null logl:" + repr(self.null_logl))
+		print("MAX logl:" + repr(self.max_logl))
 		lhr = lh_ratio_test(self.null_logl, self.max_logl, 1)
 		pvalue = lhr.get_p_value()
-		print(pvalue)
+		print("P-value:" + repr(pvalue))
 		if pvalue >= 0.05:
 			self.species_list = []
 			self.species_list.append(self.tree.get_leaves()) 
+			self.init_tree()
 		return len(self.species_list)
 		
 	
@@ -201,12 +218,14 @@ class mix_exp:
 
 
 if __name__ == "__main__":
-	#me = mix_exp("2mtree.tre")
+	me = mix_exp("2mtree.tre")
 	#me = mix_exp("test.tree.tre")
-	me = mix_exp("2m2.tre")
+	#me = mix_exp("3m.tre", sp_rate = 14.396, fix_sp_rate = True)
+	#me = mix_exp("3m.tre")
 	#me = mix_exp("cox1.tre")
 	#me = mix_exp("t1.tre")
 	#me = mix_exp("1ms1.tre")
 	me.search()
-	print(me.count_species())
+	print("Number of species:" + repr(me.count_species()))
 	me.print_species()
+	me.showTree()
