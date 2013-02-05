@@ -84,6 +84,8 @@ class coalescents:
 		return sr
 	
 	def update(self, rate = 0, p = 1):
+		self.p = p
+		self.rate = rate
 		for coa in self.coa_list:
 			if self.const_rate:
 				coa.rate = rate
@@ -91,14 +93,18 @@ class coalescents:
 				coa.p = p
 	
 	def update_p(self, p):
+		self.p = p
 		for coa in self.coa_list:
 			if self.const_p:
 				coa.p = p
+				
 	
 	def update_rate(self, rate):
+		self.rate = rate
 		for coa in self.coa_list:
 			if self.const_rate:
-				coa.rate = rate	
+				coa.rate = rate
+				
 				
 	def getNumDivEvent(self):
 		ndiv = 0
@@ -152,6 +158,8 @@ class waiting_time:
 		self.b = self.spe.getBirthRate() + self.coas.getSumCoaRate()
 		prob = self.b * math.exp (-1.0 * self.b * self.length)
 		if prob <=0:
+			print("branch lenghth:" + repr(self.length))
+			print("b:" + repr(self.b))
 			return None
 		else:
 			return math.log(prob)
@@ -162,14 +170,12 @@ class waiting_time:
 	def scaleCoaBranchL(self):
 		br = 0
 		for coa in self.coas.coa_list:
-			#print(coa.num_individual)
 			br = br + math.pow (coa.num_individual * (coa.num_individual-1), self.coa_p) * self.length 
-		#print("branch length in wt: " + repr(br))
 		return br
 
 
 class tree_time:
-	def __init__(self, wtimes, num_spe = 1):
+	def __init__(self, wtimes, num_spe):
 		self.w_time_list = wtimes
 		self.llh = 0
 		self.spe_rate = 0.001
@@ -182,6 +188,27 @@ class tree_time:
 		self.numCoaEvent = 0
 		for coa in last_wc.coas.coa_list:
 			self.numCoaEvent = self.numCoaEvent + coa.getNumDivEvent()
+			
+		print("No.speEvent: " + repr(self.numSpeEvent) )
+		print("No.coaEvent: " + repr(self.numCoaEvent) ) 
+		spe_rate_dn = 0
+		coa_rate_dn = 0 
+		for w_time in self.w_time_list:
+			spe_rate_dn = spe_rate_dn + w_time.scaleSpeBranchL()
+			coa_rate_dn = coa_rate_dn + w_time.scaleCoaBranchL()
+		
+		if spe_rate_dn == 0:
+			self.spe_rate = 0
+		else:
+			self.spe_rate = self.numSpeEvent/spe_rate_dn
+			
+		if coa_rate_dn == 0:
+			self.coa_rate = 0
+		else:
+			self.coa_rate = self.numCoaEvent/coa_rate_dn
+		
+		print("sperate: " + repr(self.spe_rate) )
+		print("coarate: " + repr(self.coa_rate) ) 
 		
 	def show(self):
 		print("This is tree_time with spe event: " + repr(self.numSpeEvent) + ", coa event: " + repr(self.numCoaEvent)) 
@@ -191,6 +218,7 @@ class tree_time:
 		for w_time in self.w_time_list:
 			if w_time.logl() == None:
 				self.llh = -sys.float_info.max
+				print("wtime logl infinity!!")
 				break
 			else:
 				self.llh = self.llh + w_time.logl()
@@ -215,8 +243,6 @@ class tree_time:
 		else:
 			self.coa_rate = self.numCoaEvent/coa_rate_dn
 		
-		#print("spe rate dn:" + repr(spe_rate_dn))
-		#print("cao_rate dn:" + repr(coa_rate_dn))
 		
 		for w_time in self.w_time_list:
 			w_time.update_rate(self.spe_rate, self.coa_rate)
@@ -238,22 +264,23 @@ def optimize_all(tree):
 	utree = Ultrametric_tree.um_tree(tree)
 	for tnode in utree.nodes:
 		wt_list, num_spe = utree.get_waiting_times(threshold_node = tnode)
-		tt = tree_time(wt_list)
-		
+		tt = tree_time(wt_list, num_spe)
 		last_llh = float("-inf")
 		change = float("inf")
 		cnt = 0
 		while change > min_change and cnt < max_iters:
 			cnt = cnt + 1
-			para = fmin(tar_fun, [1, 1], [tt])
+			para = fmin(tar_fun, [1, 1], [tt], disp = False)
 			tt.update(para[0], para[1])
-			change = abs(tt.sum_llh() - last_llh)
 			
+			change = abs(tt.sum_llh() - last_llh)
+			last_llh = tt.sum_llh()
+
 		if tt.sum_llh() > best_llh:
 			best_llh = tt.sum_llh()
 			best_num_spe = num_spe
-		
-	
+
+
 	print("Highest llh:" + repr(best_llh))
 	print("Num spe:" + repr(best_num_spe))
 
@@ -267,13 +294,20 @@ if __name__ == "__main__":
         #num_spe = sf.search()
         #print("Final No. Spe" )
         #print(num_spe)
-        #utree = Ultrametric_tree.um_tree("test.tree.tre")
-        #wt_list, num_spe = utree.get_waiting_times(threshold_node_idx = 0)
-        #his = tree_time(wt_list)
+        """
+        utree = Ultrametric_tree.um_tree("test.tree.tre")
+        wt_list, num_spe = utree.get_waiting_times(threshold_node_idx = 0)
+        his = tree_time(wt_list, num_spe)
+        wt_list, num_spe = utree.get_waiting_times(threshold_node_idx = 1)
+        his = tree_time(wt_list, num_spe)
+        wt_list, num_spe = utree.get_waiting_times(threshold_node_idx = 2)
+        his = tree_time(wt_list, num_spe)
+        """
         #his.optimize_all()
         #val = fmin(tar_fun, [1,1], [his,1])
         #print(val)
         optimize_all("test.tree.tre")
+        #optimize_all("dent_COI_um.tre")
         #optimize_all("2mtree.tre")
 
 

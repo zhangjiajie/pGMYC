@@ -97,9 +97,9 @@ class um_tree:
 			min_brl = 0.0001
 		
 		for wt in wt_list:
-			pass
+			#pass
 			#wt.length = wt.length/min_brl
-			#print(wt)
+			print(wt)
 		
 		return wt_list, num_spe
 
