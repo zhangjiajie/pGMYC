@@ -96,12 +96,18 @@ class um_tree:
 		if min_brl < 0.0001:
 			min_brl = 0.0001
 		
-		for wt in wt_list:
+		#for wt in wt_list:
 			#pass
 			#wt.length = wt.length/min_brl
-			print(wt)
+			#print(wt)
 		
 		return wt_list, num_spe
+		
+	def show(self, wt_list):
+		for wt in wt_list:
+			print(wt)
+		
+		
 
 
 if __name__ == "__main__":
@@ -121,19 +127,25 @@ if __name__ == "__main__":
 	#ut =um_tree(tree = "2mtree.tre")
 	wl, n = ut.get_waiting_times(threshold_node_idx = 0)
 	print(n)
+	ut.show(wl)
 	print("@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@")
 	wl, n = ut.get_waiting_times(threshold_node_idx = 1)
 	print(n)
+	ut.show(wl)
 	print("@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@")
 	wl, n = ut.get_waiting_times(threshold_node_idx = 2)
 	print(n)
+	ut.show(wl)
 	print("@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@")
 	wl, n = ut.get_waiting_times(threshold_node_idx = 3)
 	print(n)
+	ut.show(wl)
 	print("@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@")
 	wl, n = ut.get_waiting_times(threshold_node_idx = 4)
 	print(n)
+	ut.show(wl)
 	print("@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@")
 	wl, n = ut.get_waiting_times(threshold_node_idx = 5)
 	print(n)
+	ut.show(wl)
 	print("@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@")

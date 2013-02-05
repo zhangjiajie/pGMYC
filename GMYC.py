@@ -247,6 +247,9 @@ class tree_time:
 		for w_time in self.w_time_list:
 			w_time.update_rate(self.spe_rate, self.coa_rate)
 
+#TODO: the null model using Yule
+class null_model:
+	pass
 
 def tar_fun(x, *args):
 	"""args[0] is tree_time"""
@@ -303,6 +306,9 @@ if __name__ == "__main__":
         wt_list, num_spe = utree.get_waiting_times(threshold_node_idx = 2)
         his = tree_time(wt_list, num_spe)
         """
+        #8.070998
+        #1527.249 logl
+        #1523.295 null
         #his.optimize_all()
         #val = fmin(tar_fun, [1,1], [his,1])
         #print(val)
