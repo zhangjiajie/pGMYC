@@ -441,7 +441,9 @@ gmyc <- function(tr, method = "single", interval = c(0, 5), quiet = FALSE) {
 		  
 		  assign("s.nod", s.nod, envir=local.env)
 		  assign("i.mat", i.mat, envir=local.env)
-		  
+		  #write(i.mat, ncolumns=numnod, "")
+		  #cat(s.nod, "\n")
+		  #cat(i.mat, "\n")
 	}
 
 	###LIKELIHOOD FUNCTIONS - NULL AND MINIMUM MODEL
@@ -467,7 +469,7 @@ gmyc <- function(tr, method = "single", interval = c(0, 5), quiet = FALSE) {
 	  ##prob of any event happening
 		p <- c(rep(q[1],n),q[2])
 		lambda <- sum(s.nod[1:n,]) / sum(i.mat[1:n,]^p[-(n+1)]%*%internod)
-		lambda<- c(rep(lambda,n),sum(s.nod[n+1,]) / i.mat[n+1,]^p[n+1]%*%internod)
+		lambda <- c( rep(lambda,n),sum(s.nod[n+1,]) / i.mat[n+1,]^p[n+1]%*%internod )
 				
 		b<-t(i.mat^p)%*%lambda
 		lik<-b*exp(-b*internod)	
@@ -635,7 +637,7 @@ gmyc <- function(tr, method = "single", interval = c(0, 5), quiet = FALSE) {
 			
 			l.results[j,] <- gmyc.likelihood() 
 			
-			if (!quiet) { cat (j, threshy, l.results[j,1], "\n") }
+			if (!quiet) { cat (j, threshy, l.results[j,1],"b:", b, "lambda", lambda, "l3", l.results[j,3], "l4", l.results[j,4], "l5", l.results[j,5], "\n") }
 
 		}
 		 #results[j,]<-nod.type

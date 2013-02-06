@@ -47,10 +47,10 @@ class coalescent:
 		 self.p = p
 	
 	def getCoalesecntRate(self):
-		return self.rate * math.pow(self.num_individual * (self.num_individual - 1), self.p)
+		return self.rate * math.pow(self.num_individual * (self.num_individual - 1.0), self.p)
 		
 	def getNumDivEvent(self):
-		return self.num_individual - 1 
+		return self.num_individual -1
 
 
 class coalescents:
@@ -61,6 +61,7 @@ class coalescents:
 		self.p = p
 		self.const_rate = const_rate
 		self.const_p = const_p
+		self.coas_idx = -1
 	
 	def __str__(self):
 		s = ""
@@ -71,10 +72,8 @@ class coalescents:
 		return s
 	
 	def add_coalescent(self,coa):
-		if self.const_rate:
-			coa.rate = self.rate 
-		if self.const_p:
-			coa.p = self.p
+		coa.rate = self.rate 
+		coa.p = self.p
 		self.coa_list.append(coa)
 		
 	def getSumCoaRate(self): #this is b
@@ -87,22 +86,18 @@ class coalescents:
 		self.p = p
 		self.rate = rate
 		for coa in self.coa_list:
-			if self.const_rate:
-				coa.rate = rate
-			if self.const_p:
-				coa.p = p
+			coa.rate = rate
+			coa.p = p
 	
 	def update_p(self, p):
 		self.p = p
 		for coa in self.coa_list:
-			if self.const_p:
 				coa.p = p
 				
 	
 	def update_rate(self, rate):
 		self.rate = rate
 		for coa in self.coa_list:
-			if self.const_rate:
 				coa.rate = rate
 				
 				
@@ -125,11 +120,22 @@ class waiting_time:
 		self.coa_rate = 0
 		self.coa_p = 1
 		self.coa_n = num_coas
+		self.num_lines = None
+		self.num_curr_coa = 0
+	
+	def count_num_lines(self):
+		"""This is used for the null model only!!!"""
+		self.num_lines = self.spe_n
+		for coa in self.coas.coa_list:
+			self.num_lines = self.num_lines + coa.num_individual
+		self.num_lines = self.num_lines * (self.num_lines - 1)
+		#print self.num_lines
 	
 	def __str__(self):
 		s = "Waitting time = " + repr(self.length) + "\n"
 		s = s + str(self.spe) + "\n"
-		s = s + str(self.coas) + "\n"
+		s = s + str(self.coas)# + "\n"
+		s = s + "Numer curr coa lines:"+ str(self.num_curr_coa) + "\n"
 		s = s + "---------------------------------------------------------\n"
 		return s 
 	
@@ -170,7 +176,7 @@ class waiting_time:
 	def scaleCoaBranchL(self):
 		br = 0
 		for coa in self.coas.coa_list:
-			br = br + math.pow (coa.num_individual * (coa.num_individual-1), self.coa_p) * self.length 
+			br = br + math.pow(coa.num_individual * (coa.num_individual-1), self.coa_p) * self.length 
 		return br
 
 
@@ -187,8 +193,10 @@ class tree_time:
 		last_wc = self.w_time_list[-1]
 		self.numCoaEvent = 0
 		for coa in last_wc.coas.coa_list:
-			self.numCoaEvent = self.numCoaEvent + coa.getNumDivEvent()
-			
+			self.numCoaEvent = self.numCoaEvent + coa.getNumDivEvent() 
+		 
+		##################################################	
+		print("")
 		print("No.speEvent: " + repr(self.numSpeEvent) )
 		print("No.coaEvent: " + repr(self.numCoaEvent) ) 
 		spe_rate_dn = 0
@@ -206,9 +214,9 @@ class tree_time:
 			self.coa_rate = 0
 		else:
 			self.coa_rate = self.numCoaEvent/coa_rate_dn
-		
-		print("sperate: " + repr(self.spe_rate) )
-		print("coarate: " + repr(self.coa_rate) ) 
+		#############################################3
+		#print("sperate: " + repr(self.spe_rate) )
+		#print("coarate: " + repr(self.coa_rate) ) 
 		
 	def show(self):
 		print("This is tree_time with spe event: " + repr(self.numSpeEvent) + ", coa event: " + repr(self.numCoaEvent)) 
@@ -225,6 +233,9 @@ class tree_time:
 		return self.llh
 	
 	def update(self, spe_p, coa_p):
+		self.spe_p = spe_p
+		self.coa_p = coa_p
+		
 		for w_time in self.w_time_list:
 			w_time.update_p(spe_p, coa_p)
 		spe_rate_dn = 0
@@ -247,9 +258,28 @@ class tree_time:
 		for w_time in self.w_time_list:
 			w_time.update_rate(self.spe_rate, self.coa_rate)
 
-#TODO: the null model using Yule
+#TODO: the null model using Coalescent
 class null_model:
-	pass
+	def __init__(self, wt_list, tree):
+		nodes = tree.get_leaves()
+		self.num_speEvent = len(nodes) - 1
+		self.wt_list = wt_list
+		self.p = 1.0
+		self.rate = 0.0
+	
+	def logl(self, p = 1.0):
+		self.p = p
+		br_de = 0.0
+		for wt in self.wt_list: #[0:-1]:
+			#print(wt.num_lines)
+			br_de = br_de + wt.length * math.pow(wt.num_lines, self.p)
+		self.rate = self.num_speEvent / br_de
+		logl = 0
+		for wt in self.wt_list: #[0:-1]:
+			logl = logl + math.log(self.rate * math.pow(wt.num_lines, self.p) * math.exp(self.rate * math.pow(wt.num_lines, self.p) * wt.length * -1.0))
+		
+		print(logl)
+		return logl
 
 def tar_fun(x, *args):
 	"""args[0] is tree_time"""
@@ -264,13 +294,14 @@ def optimize_all(tree):
 	max_iters = 100
 	best_llh = float("-inf")
 	best_num_spe = -1
-	utree = Ultrametric_tree.um_tree(tree)
+	utree = Ultrametric_tree.um_tree(tree, r_mode = False)
 	for tnode in utree.nodes:
 		wt_list, num_spe = utree.get_waiting_times(threshold_node = tnode)
 		tt = tree_time(wt_list, num_spe)
 		last_llh = float("-inf")
 		change = float("inf")
 		cnt = 0
+		"""
 		while change > min_change and cnt < max_iters:
 			cnt = cnt + 1
 			para = fmin(tar_fun, [1, 1], [tt], disp = False)
@@ -278,7 +309,19 @@ def optimize_all(tree):
 			
 			change = abs(tt.sum_llh() - last_llh)
 			last_llh = tt.sum_llh()
-
+		"""
+		para = fmin(tar_fun, [1, 1], [tt], disp = False)
+		if para[0] < 0:
+			para[0] = 0.0000001
+		if para[1] < 0:
+			para[1] = 0.0000001
+		tt.update(para[0], para[1])
+		
+		print("Num spe:" + repr(num_spe) + ": " + repr(tt.sum_llh()))
+		print("spe_lambda:" + repr(tt.spe_rate))
+		print("coa_lambda:" + repr(tt.coa_rate))
+		print("spe_p:" + repr(tt.spe_p))
+		print("coa_p:" + repr(tt.coa_p))
 		if tt.sum_llh() > best_llh:
 			best_llh = tt.sum_llh()
 			best_num_spe = num_spe
@@ -297,9 +340,20 @@ if __name__ == "__main__":
         #num_spe = sf.search()
         #print("Final No. Spe" )
         #print(num_spe)
+        #utree = Ultrametric_tree.um_tree("2mtree.tre")
+        #utree = Ultrametric_tree.um_tree("test.tree.tre")
+        #dent_COI_um.tre
+        
+        #utree = Ultrametric_tree.um_tree("dent_COI_um.tre")
         """
-        utree = Ultrametric_tree.um_tree("test.tree.tre")
         wt_list, num_spe = utree.get_waiting_times(threshold_node_idx = 0)
+        nm = null_model(wt_list, utree.tree)
+        for i in range(50):
+			#print(i/10.0)
+			nm.logl(p = i/10.0)
+        
+        """
+        """
         his = tree_time(wt_list, num_spe)
         wt_list, num_spe = utree.get_waiting_times(threshold_node_idx = 1)
         his = tree_time(wt_list, num_spe)
