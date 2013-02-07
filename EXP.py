@@ -219,15 +219,21 @@ class mix_exp:
 
 
 if __name__ == "__main__":
-	#me = mix_exp("2mtree.tre")
-	#me = mix_exp("test.tree.tre")
-	#me = mix_exp("3m.tre", sp_rate = 14.396, fix_sp_rate = True)
-	#me = mix_exp("3m.tre")
-	me = mix_exp("pv3.tre")
-	#me = mix_exp("t1.tre", sp_rate = 14.396, fix_sp_rate = True)
-	#me = mix_exp("1ms1.tre")
-	#me = mix_exp("pime_COI_um.tre")
-	me.search(reroot = True)
-	print("Number of species:" + repr(me.count_species()))
-	me.print_species()
-	me.showTree(scale = 1000)
+	if len(sys.argv) < 4: 
+		print("usage: ./EXP.py  <tree_of_life.tre>  <-r/-n (reroot or not)>  <-s/-n (show or not)>  <scale>")
+		sys.exit()
+	me = mix_exp(sys.argv[1])
+	if sys.argv[2] == "-r":
+		me.search(reroot = True)
+		print("Number of species:" + repr(me.count_species()))
+		me.print_species()
+	else:
+		me.search(reroot = False)
+		print("Number of species:" + repr(me.count_species()))
+		me.print_species()
+	
+	if sys.argv[3] == "-s":
+		if (len(sys.argv) > 4):
+			me.showTree(scale = int(sys.argv[4]))
+		else:
+			me.showTree(scale = 500)

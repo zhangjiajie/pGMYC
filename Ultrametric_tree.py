@@ -8,8 +8,7 @@ from ete2 import Tree, TreeStyle, TextFace, SeqGroup
 
 
 class um_tree:
-	def __init__(self, tree, r_mode = False):
-		self.r_mode = r_mode
+	def __init__(self, tree):
 		self.tree = Tree(tree, format = 1)
 		self.tree.add_feature("age", 0)
 		self.nodes = self.tree.get_descendants()
@@ -28,10 +27,12 @@ class um_tree:
 		if one_leaf.is_leaf():
 			self.nodes.append(one_leaf)
 		self.nodes.sort(key=self.__compare_node)
-		
+
+
 	def __compare_node(self, node):
 		return node.age
-		
+
+
 	def get_waiting_times(self, threshold_node = None, threshold_node_idx = 0):
 		wt_list = []
 		reach_t = False
@@ -45,13 +46,11 @@ class um_tree:
 		if threshold_node == None:
 			threshold_node = self.nodes[threshold_node_idx]
 		
-		#last_wt = None 
 		last_coa_num = 0
 		tcnt = 0 
 		for node in self.nodes:
 			wt = None
 			times = node.age - curr_age
-			#print(times)
 			if times >= 0:
 				if times < min_brl and times > 0:
 					min_brl = times
@@ -78,10 +77,7 @@ class um_tree:
 						else:
 							fnode = fnode.up
 							
-					if self.r_mode:
-						wt = GMYC.waiting_time(length = times, num_coas =curr_num_coa, num_lines = 0)
-					else:
-						wt = GMYC.waiting_time(length = times, num_coas =curr_num_coa, num_lines = curr_spe)
+					wt = GMYC.waiting_time(length = times, num_coas =curr_num_coa, num_lines = curr_spe)
 					
 					for coa_r in coa_roots:
 						coa = GMYC.coalescent(num_individual = coa_r.curr_n)
@@ -89,7 +85,6 @@ class um_tree:
 					
 					wt.coas.coas_idx = last_coa_num
 					wt.num_curr_coa = last_coa_num
-					#print("coano: " + repr(last_coa_num))
 					if coa_root == None: #here can be modified to use multiple T
 						curr_spe = curr_spe - 1
 						curr_num_coa = curr_num_coa + 1
@@ -122,37 +117,20 @@ class um_tree:
 		
 		for wt in wt_list:
 			wt.count_num_lines()
-			#pass
-			#wt.length = wt.length/min_brl
-			#print(wt)
 		
 		return wt_list, num_spe
-		
+
+
 	def show(self, wt_list):
 		cnt = 1
 		for wt in wt_list:
 			print("Waitting interval "+ repr(cnt))
 			print(wt)
 			cnt = cnt + 1
-		
-		
 
 
 if __name__ == "__main__":
-	#print("main function")
-	#t = Tree("test.tree.tre", format = 1)
-	#print(t)
-	#t.show()
-	#lvs = t.get_leaves()
-	#for leaf in lvs:
-		 #print (leaf.get_distance(t))
-		 
-	#nodes = t.get_descendants()
-	#for n in nodes:
-	#	print (n.dist)
-	#print t.dist
 	ut =um_tree(tree = "test.tree.tre", r_mode = False)
-	#ut =um_tree(tree = "2mtree.tre")
 	wl, n = ut.get_waiting_times(threshold_node_idx = 0)
 	print(n)
 	ut.show(wl)
