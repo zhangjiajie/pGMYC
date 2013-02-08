@@ -78,6 +78,7 @@ class mix_exp:
 				self.coa_br.append(node.dist)
 		e1 = exp_distribution(self.coa_br)
 		self.null_logl = e1.sum_log_l()
+		return e1.rate
 	
 	def set_model_data(self):
 		self.spe_br = []
@@ -177,7 +178,7 @@ class mix_exp:
 		ts.scale =  scale # scale pixels per branch length unit
 		self.tree.show(tree_style=ts)
 	
-	def count_species(self):
+	def count_species(self, print_log = False):
 		node_list = self.tree.get_descendants()
 		for node in node_list:
 			if node.t == "spe":
@@ -195,14 +196,16 @@ class mix_exp:
 							self.species_list.append(child.get_leaves())
 				else:
 					self.species_list.append(node.get_leaves())
-		print("Speciation rate:" + repr(self.rate2))
-		print("Coalesecnt rate:" + repr(self.rate1))
-		print("Null logl:" + repr(self.null_logl))
-		print("MAX logl:" + repr(self.max_logl))
+
 		lhr = lh_ratio_test(self.null_logl, self.max_logl, 1)
 		pvalue = lhr.get_p_value()
-		print("P-value:" + repr(pvalue))
-		if pvalue >= 0.05:
+		if print_log:
+			print("Speciation rate:" + repr(self.rate2))
+			print("Coalesecnt rate:" + repr(self.rate1))
+			print("Null logl:" + repr(self.null_logl))
+			print("MAX logl:" + repr(self.max_logl))
+			print("P-value:" + repr(pvalue))
+		if pvalue >= 0.01:
 			self.species_list = []
 			self.species_list.append(self.tree.get_leaves()) 
 			self.init_tree()
