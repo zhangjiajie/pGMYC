@@ -52,6 +52,69 @@ class exp_distribution:
 			s = s + self.log_l(br)
 		return s 
 
+class species_setting:
+	def __init__(self, spe_nodes, root, sp_rate = 0, fix_sp_rate = False):
+		self.min_brl = 0.0001
+		self.spe_rate = sp_rate
+		self.fix_spe_rate = fix_sp_rate
+		self.spe_nodes = spe_nodes
+		self.root = root
+		self.all_nodes = root.get_descendants()
+		self.all_nodes.append(self.root)
+		self.coa_nodes = []
+		for node in self.all_nodes:
+			if not node in self.spe_nodes:
+				self.coa_nodes.append(node) 
+		
+		self.active_nodes = []
+		for node in self.spe_nodes:
+			childs = node.get_children()
+			for child in childs:
+				if not child in self.spe_nodes:
+					self.active_nodes.append(node)
+					break 
+		
+	def get_log_l(self):
+		self.spe_br = []
+		self.coa_br = []
+		for node in self.spe_nodes:
+			if node.dist > self.min_brl
+				self.spe_br.append(node.dist)
+		
+		for node in self.coa_nodes:
+			if node.dist > self.min_brl
+				self.coa_br.append(node.dist)
+				
+		e1 = exp_distribution(self.coa_br)
+		e2 = None
+		if self.fix_spe_rate:
+			e2 = exp_distribution(self.spe_br, rate = self.spe_rate)
+		else:
+			e2 = exp_distribution(self.spe_br)
+		self.rate1 = e1.rate
+		self.rate2 = e2.rate
+		logl = e1.sum_log_l() + e2.sum_log_l()
+		return logl
+		
+	def count_species(self):
+		self.spe_list = []
+		for node in self.active_nodes:
+			one_spe = []
+			if node.is_leaf():
+				one_spe.append(node)
+			else:
+				childs = node.get_children()
+				
+				for child in childs:
+					if not child in self.spe_nodes:
+						if child.is_leaf():
+							one_spe.append(child)
+						else:
+							one_spe.extend(child.get_leaves())
+			self.spe_list.append(one_spe)
+	return len(self.spe_list), self.spe_list
+
+
 class mix_exp:
 	def __init__(self, tree, sp_rate = 0, coa_rate = 0, fix_sp_rate = False):
 		self.tree = Tree(tree, format = 1)
@@ -167,6 +230,10 @@ class mix_exp:
 						node.add_feature("t", "spe")
 		self.set_model_data()
 		
+	def search_ex(self, root):
+		pass
+		
+		
 		
 	def showTree(self, scale = 1000):
 		self.tree.add_face(TextFace("SPE"), column=0, position = "branch-right")
@@ -178,8 +245,11 @@ class mix_exp:
 		ts.scale =  scale # scale pixels per branch length unit
 		self.tree.show(tree_style=ts)
 	
-	def count_species(self, print_log = False):
+	def count_species(self, print_log = True):
 		node_list = self.tree.get_descendants()
+		leaves = self.tree.get_leaves()
+		#self.tree.add_feature("t", "spe")
+		#node_list.append(self.tree)
 		for node in node_list:
 			if node.t == "spe":
 				childs = node.get_children()
@@ -188,6 +258,7 @@ class mix_exp:
 					if child.t == "spe":
 						flag = True
 						break
+				
 				if flag:
 					for child in childs:
 						if child.t == "spe":
@@ -196,6 +267,19 @@ class mix_exp:
 							self.species_list.append(child.get_leaves())
 				else:
 					self.species_list.append(node.get_leaves())
+					
+		rest = []
+		added = []
+		for sp in self.species_list:
+			for leaf in sp:
+				added.append(leaf)
+		
+		for leaf in leaves:
+			if not leaf in added:
+				rest.append(leaf)
+		
+		if len(rest) != 0:
+			self.species_list.append(rest)
 
 		lhr = lh_ratio_test(self.null_logl, self.max_logl, 1)
 		pvalue = lhr.get_p_value()

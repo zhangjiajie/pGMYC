@@ -40,18 +40,55 @@ def token(tree):
 			curridx = curridx + 1
 	return tks
 
-def extract_sub_tree(tree, leafs):
+def grab_sub_tree(tree, leafs):
 	tks = token(tree)
-	stak = deque()
-	stak.append(tks[0])
+	#stak = deque()
+	#stak.append(tks[0])
 	start_taxa = -1
 	end_taxa = -1
 	for i in range(len(tks))[1:]:
-		if (len(leafs)!=0) and (tks[i] in leafs) and (start_p == -1):
+		if (len(leafs)!=0) and (tks[i] in leafs) and (start_taxa == -1):
 			leafs.remove(tks[i])
-			start_taxa = i-1 
+			start_taxa = i - 1 
+		elif (len(leafs)==1) and (tks[i] in leafs) and (end_taxa == -1):
+			end_taxa = i + 3
+		else:
+			if tks[i] in leafs:
+				leafs.remove(tks[i])
 		
-		
+	subs = deque(tks[start_taxa:(end_taxa + 1)])
+	print (subs)
+	left_cnt = 0
+	right_cnt = 0
+	coma_cnt = 0
+	sumb = 0 
+	for tk in subs:
+		if "(" == tk:
+			left_cnt = left_cnt + 1
+		elif ")" == tk:
+			right_cnt = right_cnt + 1
+		elif "," == tk:
+			coma_cnt = coma_cnt + 1
+	if left_cnt > right_cnt:
+		sumb = left_cnt * 2
+		append_num = left_cnt - right_cnt
+		append = [")"] * append_num
+		subs.extend(append)
+	elif right_cnt > left_cnt:
+		sumb = right_cnt * 2
+		append_num = right_cnt - left_cnt
+		append = ["("] * append_num
+		subs.extendleft(append)
+	else:
+		sumb = left_cnt + right_cnt
+	
+	if sumb!= (coma_cnt*2):
+		subs.append(")")
+		subs.appendleft("(")
+	
+	print("".join(subs))
+	
+	
 
 def gen_alignment(seq_names = [], alignment = SeqGroup(), outputfile = "epa_parser_alignments.out"):
 	"""generate alignment from the input taxa name list - seq_name, and SeqGroup - alignment"""
@@ -184,14 +221,11 @@ def extract_placement2(nfin_place, nfin_aln, nfout):
 	data = json.load(jsondata)
 	placements = data["placements"]
 	tree = data["tree"]
-	#print(tree)
 	
 	ete_tree = tree.replace("{", "[&&NHX:B=")
 	ete_tree = ete_tree.replace("}", "]")
 	root = Tree(ete_tree, format=1)
 	leaves = root.get_leaves()
-	print("This should be the ref tree")
-	print(leaves)
 	placemap = {}
 	"""find how many edges are used for placement"""
 	for placement in placements:
@@ -222,41 +256,46 @@ def extract_placement2(nfin_place, nfin_aln, nfout):
 		if len(seqset)>3:
 			num_epa_edges = num_epa_edges + 1
 			
+			#genrate the newwick string to be inserted into the ref tree
 			multi_fcating = "("
 			for seqname in seqset:
 				#multi_fcating = multi_fcating + "," + seqname
 				multi_fcating = multi_fcating + seqname + ","
-			
 			multi_fcating = multi_fcating[:-1] 
-			
 			multi_fcating = "{" + repr(seqset_name) + "}," + multi_fcating + ")"
-			
 			mtfc_tree = tree.replace("{" + repr(seqset_name) + "}", multi_fcating)
-			
 			mtfc_tree = rep.sub("", mtfc_tree)
-			#print(mtfc_tree)
 			
+			#The target taxa names
 			curr_placement = []
 			for n in seqset:
 				curr_placement.append(n)
 			
+			#Now seqset contains refseq
 			for leaf in leaves:
-				print(leaf.name)
 				seqset.append(leaf.name)
-			#print(seqset)
 			
+			#generate aligment with ref seqs
 			alnname = gen_alignment(seq_names = seqset, alignment = align_orgin, outputfile = nfout + repr(i) + ".phy")
+			
+			#write multifurcating tree
 			mtfc_out = open(nfout + repr(i) + ".mttree", "w")
 			mtfc_out.write(mtfc_tree)
 			mtfc_out.close()
 			
+			#raxml constrait search
 			trename = build_constrain_tree(alnname, nfout + repr(i) + ".mttree", nfout+repr(i))
 			
+			#read in the fully resolved tree
 			full_tree = Tree(trename, format=1)
-			print(curr_placement)
-			full_tree.prune(curr_placement)
-			full_tree.write(outfile= nfout + repr(i) + ".subtree", format=5)
-			"""
+			
+			#the place where the tree can be safely rooted
+			ref_node = full_tree.get_leaves_by_name(leaves[0].name)[0]
+			
+			#reroot 
+			full_tree.set_outgroup(ref_node)
+			
+			#find the common ancestor of the target taxa
 			leafA = full_tree.get_leaves_by_name(curr_placement[0])[0]
 			leaflist = []
 			for n in curr_placement[1:]:
@@ -264,9 +303,12 @@ def extract_placement2(nfin_place, nfin_aln, nfout):
 			common = leafA.get_common_ancestor(leaflist)
 			common.up = None
 			common.write(outfile= nfout + repr(i) + ".subtree", format=5)
-			"""
-			#aln_fnames.append(alnname)
-			#tre_fnames.append(trename)
+			
+			os.remove(nfout + repr(i) + ".mttree")
+			os.remove(trename)
+			
+			aln_fnames.append(alnname)
+			tre_fnames.append(nfout + repr(i) + ".subtree")
 	
 	return num_epa_edges, aln_fnames, tre_fnames
 
@@ -307,6 +349,11 @@ def mix_exp_model(nfin_tree_list, nfin_ref_tree = None):
 	return spe_num_list, true_spe_num_list
 	
 
+
+def dppdiv():
+	#"./dppdiv-pthreads-sse3 -T 4 -in testdata/sample.phy -tre testdata/sample.tree -cal testdata/sample.cal -n 1000 -out output/sample"
+	pass
+
 #step6: batch test
 def batch_test(folder="./", suf = "phy", num_spe_tree = 10):
 	phyl = glob.glob(folder + "*." + suf)
@@ -318,16 +365,16 @@ def batch_test(folder="./", suf = "phy", num_spe_tree = 10):
 	true_num_sp = 0 
 	for phy in phyl:
 		fin1 = pre_pro_aln(nfin=phy, nfout="temp1")
-		fin2 = extract_ref_alignment(nfin = fin1 , nfout = "temp2.phy", num_prune = 3)
+		fin2 = extract_ref_alignment(nfin = fin1 , nfout = "temp2.phy", num_prune = 2)
 		fin3 = build_ref_tree(nfin = fin2, nfout = "temp3")
 		fin4 = run_EPA(nfin_aln =fin1 , nfin_tree=fin3 , nfout="p3")
-		num_e, alns, tres = extract_placement(nfin_place = fin4, nfin_aln = fin1, nfout = "p4")
+		num_e, alns, tres = extract_placement2(nfin_place = fin4, nfin_aln = fin1, nfout = "p4")
 		num_placement = num_placement + num_e
 		sp_num_l, true_sp_num_l = mix_exp_model(tres, nfin_ref_tree = fin3)
 		for aln in alns:
 			os.remove(aln)
-		for tre in tres:
-			os.remove(tre)
+		#for tre in tres:
+		#	os.remove(tre)
 		jk1 = glob.glob("*.reduced")
 		for jkfile in jk1:
 			os.remove(jkfile)
@@ -360,12 +407,14 @@ def batch_test(folder="./", suf = "phy", num_spe_tree = 10):
 
 if __name__ == "__main__":
 	
-	#batch_test(folder="./", suf = "phy", num_spe_tree = 10)
+	batch_test(folder="./", suf = "phy", num_spe_tree = 10)
 	#pre_pro_aln(nfin="pv.phy", nfout="jz.phy")
 	#sys.exit()
 	
 	#extract_placement2(nfin_place = "p3.jplace", nfin_aln = "pipe_test.phy" , nfout = "mf")
-	token("((6.10.r:0.84314588630213416209,(6.1.q,6.6.q,6.4.q,6.7.q,6.9.q,6.3.q,6.2.q,6.8.q,6.5.q),(8.10.r:0.66420620868791402369,7.10.r:0.64658585728757944633):0.36731678624631497465):0.61996417294109085194,((2.10.r:1.70135900093206116068,3.10.r:1.58117056143981926652):0.26930523710313375441,1.10.r:1.68142566753935174262):0.00000067440133086238,5.10.r:4.21404673447556810117)")
+	#tree = "(((6.9.q:0.00100237079650974015,6.7.q:0.00100465474105772279):0.00201101367340204883,((6.3.q:0.00000084782314493460,((6.2.q:0.00100412821359892714,6.8.q:0.00100178845816099155):0.00200929918166048134,((6.10.r:0.00000084782314493460,((8.10.r:0.63519639594496091206,7.10.r:0.63133318437781671406):0.35164641786541400714,(((2.10.r:1.60433520129746498561,3.10.r:1.49032545048350262284):0.27033482133716180140,1.10.r:1.58388778575899435985):0.00000084782314493460,5.10.r:3.96273032179643891482):0.59925906591284461289):0.81668233991507044323):0.00201359338363953262,6.5.q:0.00100145579190110789):0.01117194743492899885):0.00000084782314493460):0.00200738201693853417,6.4.q:0.00100242270723678562):0.00000084782314493460):0.00302073377019030330,6.6.q:0.00100116047038890888,6.1.q:0.00100552618967688712):0.0;"
+	#leafs = ["6.7.q", "6.9.q", "6.3.q", "6.2.q", "6.8.q"]
+	#grab_sub_tree(tree, leafs)
 	"""
 	fin1 = "jz.phy"
 	fin2 = extract_ref_alignment(nfin = fin1 , nfout = "p1.phy")
