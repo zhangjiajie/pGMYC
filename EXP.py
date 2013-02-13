@@ -10,6 +10,7 @@ from ete2 import Tree, TreeStyle, TextFace, SeqGroup
 from subprocess import call
 from scipy.optimize import fmin
 import collections
+from collections import deque
 from scipy import stats
 
 class lh_ratio_test:
@@ -63,34 +64,41 @@ class species_setting:
 		self.all_nodes.append(self.root)
 		self.coa_nodes = []
 		for node in self.all_nodes:
-			if not node in self.spe_nodes:
+			if not (node in self.spe_nodes):
 				self.coa_nodes.append(node) 
 		
 		self.active_nodes = []
 		for node in self.spe_nodes:
-			childs = node.get_children()
-			for child in childs:
-				if not child in self.spe_nodes:
+			if node.is_leaf():
+				self.active_nodes.append(node)
+			else:
+				childs = node.get_children()
+				flag = False
+				for child in childs:
+					if not (child in self.spe_nodes):
+						flag = True
+						break
+				if flag:
 					self.active_nodes.append(node)
-					break 
+		
 		
 	def get_log_l(self):
-		self.spe_br = []
-		self.coa_br = []
+		spe_br = []
+		coa_br = []
 		for node in self.spe_nodes:
-			if node.dist > self.min_brl
-				self.spe_br.append(node.dist)
+			if node.dist > self.min_brl:
+				spe_br.append(node.dist)
 		
 		for node in self.coa_nodes:
-			if node.dist > self.min_brl
-				self.coa_br.append(node.dist)
+			if node.dist > self.min_brl:
+				coa_br.append(node.dist)
 				
-		e1 = exp_distribution(self.coa_br)
+		e1 = exp_distribution(coa_br)
 		e2 = None
 		if self.fix_spe_rate:
-			e2 = exp_distribution(self.spe_br, rate = self.spe_rate)
+			e2 = exp_distribution(spe_br, rate = self.spe_rate)
 		else:
-			e2 = exp_distribution(self.spe_br)
+			e2 = exp_distribution(spe_br)
 		self.rate1 = e1.rate
 		self.rate2 = e2.rate
 		logl = e1.sum_log_l() + e2.sum_log_l()
@@ -103,6 +111,8 @@ class species_setting:
 			if node.is_leaf():
 				one_spe.append(node)
 			else:
+				one_spe.extend(node.get_leaves())
+				"""
 				childs = node.get_children()
 				
 				for child in childs:
@@ -111,9 +121,141 @@ class species_setting:
 							one_spe.append(child)
 						else:
 							one_spe.extend(child.get_leaves())
+				"""
 			self.spe_list.append(one_spe)
-	return len(self.spe_list), self.spe_list
+		return len(self.spe_list), self.spe_list
 
+class exponential_mixture:
+	def __init__(self, tree, sp_rate = 0, fix_sp_rate = False):
+		self.min_brl = 0.0001
+		self.tree = Tree(tree, format = 1)
+		self.tree.dist = 0.0
+		self.fix_spe_rate = fix_sp_rate
+		self.fix_spe = sp_rate
+		#self.sp_settings = deque([]) 
+		self.max_logl = float("-inf") 
+		self.max_setting = None
+		self.null_logl = 0.0
+		self.null_model()
+		self.species_list = None
+		self.counter = 0
+		self.setting_set = set([])
+	
+	def null_model(self):
+		coa_br = []
+		all_nodes = self.tree.get_descendants()
+		for node in all_nodes:
+			if node.dist > self.min_brl:
+				coa_br.append(node.dist)
+		e1 = exp_distribution(coa_br)
+		self.null_logl = e1.sum_log_l()
+		return e1.rate
+
+	def __compare_node(self, node):
+		return node.dist
+		
+	def re_rooting(self):
+		node_list = self.tree.get_descendants()
+		node_list.sort(key=self.__compare_node)
+		node_list.reverse()
+		rootnode = node_list[0]
+		self.tree.set_outgroup(rootnode)
+		self.tree.dist = 0.0
+	
+	def comp_num_comb(self):
+		for node in self.tree.traverse(strategy='postorder'):
+			if node.is_leaf():
+				node.add_feature("cnt", 1.0)
+			else:
+				acum = 1.0
+				for child in node.get_children():
+					acum = acum * child.cnt
+				acum = acum + 1.0
+				node.add_feature("cnt", acum)
+		return self.tree.cnt
+	
+	def next(self, sp_setting):
+		self.setting_set.add(frozenset(sp_setting.spe_nodes))
+		self.counter = self.counter + 1
+		#print("Search No. :" + repr(self.counter))
+		logl = sp_setting.get_log_l()
+		#print(logl)
+		if logl > self.max_logl:
+			self.max_logl = logl
+			self.max_setting = sp_setting
+			
+		#print("Num active nodes:" + repr(len(sp_setting.active_nodes)))
+		#print sp_setting.active_nodes
+		cnt = 1
+		for node in sp_setting.active_nodes:
+			#print(cnt)
+			cnt = cnt + 1
+			if node.is_leaf():
+				pass
+			else:
+				childs = node.get_children()
+				sp_nodes = []
+				for child in childs:
+					sp_nodes.append(child)
+				for nod in sp_setting.spe_nodes:
+					sp_nodes.append(nod)
+				new_sp_setting = species_setting(spe_nodes = sp_nodes, root = sp_setting.root, sp_rate = sp_setting.spe_rate, fix_sp_rate = sp_setting.fix_spe_rate)
+				if frozenset(sp_nodes) in self.setting_set:
+					pass
+				else:
+					self.next(new_sp_setting)
+		
+	def search(self, reroot = False):
+		if reroot:
+			self.re_rooting()
+		first_node_list = []
+		first_node_list.append(self.tree)
+		first_childs = self.tree.get_children()
+		for child in first_childs:
+			first_node_list.append(child)
+		
+		#print(len(first_childs))  
+		first_setting = species_setting(spe_nodes = first_node_list, root = self.tree, sp_rate = self.fix_spe, fix_sp_rate = self.fix_spe_rate)
+		self.next(first_setting)
+		
+	
+	def count_species(self, print_log = True):
+		lhr = lh_ratio_test(self.null_logl, self.max_logl, 1)
+		pvalue = lhr.get_p_value()
+		if print_log:
+			print("Speciation rate:" + repr(self.max_setting.rate2))
+			print("Coalesecnt rate:" + repr(self.max_setting.rate1))
+			print("Null logl:" + repr(self.null_logl))
+			print("MAX logl:" + repr(self.max_logl))
+			print("P-value:" + repr(pvalue))
+		if pvalue < 0.001:
+			num_sp, self.species_list = self.max_setting.count_species()
+			self.fix_spe_rate = False
+			self.max_logl = float("-inf") 
+			self.search()
+			return num_sp
+		else:
+			self.species_list = []
+			self.species_list.append(self.tree.get_leaves()) 
+			return 1
+		
+		
+	def print_species(self):
+		cnt = 1
+		for sp in self.species_list:
+			print("Species " + repr(cnt) + ":")
+			for leaf in sp:
+				print("          " + leaf.name)
+			cnt = cnt + 1
+	
+	def showTree(self, scale = 1000):
+		for t in self.max_setting.spe_nodes:
+			t.add_face(TextFace("SPE"), column=0, position = "branch-right")
+		ts = TreeStyle()
+		ts.show_leaf_name = True
+		ts.scale =  scale # scale pixels per branch length unit
+		self.tree.show(tree_style=ts)
+		
 
 class mix_exp:
 	def __init__(self, tree, sp_rate = 0, coa_rate = 0, fix_sp_rate = False):
@@ -230,9 +372,6 @@ class mix_exp:
 						node.add_feature("t", "spe")
 		self.set_model_data()
 		
-	def search_ex(self, root):
-		pass
-		
 		
 		
 	def showTree(self, scale = 1000):
@@ -309,11 +448,13 @@ if __name__ == "__main__":
 	if len(sys.argv) < 4: 
 		print("usage: ./EXP.py  <tree_of_life.tre>  <-r/-n (reroot or not)>  <-s/-n (show or not)>  <scale>")
 		sys.exit()
-	me = mix_exp(sys.argv[1])
+	#me = mix_exp(sys.argv[1])
+	me = exponential_mixture(sys.argv[1])
 	if sys.argv[2] == "-r":
-		me.search(reroot = True)
-		print("Number of species:" + repr(me.count_species()))
-		me.print_species()
+		print(me.comp_num_comb())
+		#me.search(reroot = True)
+		#print("Number of species:" + repr(me.count_species()))
+		#me.print_species()
 	else:
 		me.search(reroot = False)
 		print("Number of species:" + repr(me.count_species()))

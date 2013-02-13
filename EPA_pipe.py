@@ -330,9 +330,12 @@ def mix_exp_model(nfin_tree_list, nfin_ref_tree = None):
 	for ntre in nfin_tree_list:
 		epa_exp = None
 		if spe_rate > 0:
-			epa_exp = EXP.mix_exp(ntre, sp_rate = spe_rate, fix_sp_rate = True)
+			#epa_exp = EXP.mix_exp(ntre, sp_rate = spe_rate, fix_sp_rate = True)
+			epa_exp = EXP.exponential_mixture(ntre, sp_rate = spe_rate, fix_sp_rate = True)
 		else:
-			epa_exp = EXP.mix_exp(ntre)
+			#epa_exp = EXP.mix_exp(ntre)
+			epa_exp = EXP.exponential_mixture(ntre)
+			
 		epa_exp.search(reroot = True)
 		num_spe = epa_exp.count_species(print_log = False)
 		spe_num_list.append(num_spe)
@@ -368,7 +371,7 @@ def batch_test(folder="./", suf = "phy", num_spe_tree = 10):
 		fin2 = extract_ref_alignment(nfin = fin1 , nfout = "temp2.phy", num_prune = 2)
 		fin3 = build_ref_tree(nfin = fin2, nfout = "temp3")
 		fin4 = run_EPA(nfin_aln =fin1 , nfin_tree=fin3 , nfout="p3")
-		num_e, alns, tres = extract_placement2(nfin_place = fin4, nfin_aln = fin1, nfout = "p4")
+		num_e, alns, tres = extract_placement(nfin_place = fin4, nfin_aln = fin1, nfout = "p4")
 		num_placement = num_placement + num_e
 		sp_num_l, true_sp_num_l = mix_exp_model(tres, nfin_ref_tree = fin3)
 		for aln in alns:
