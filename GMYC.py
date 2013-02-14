@@ -1,18 +1,247 @@
 #! /usr/bin/env python
 import sys
-import os
-import json
-import operator
-import Ultrametric_tree
+#import os
+#import json
+#import operator
 import math
-import random
-from ete2 import Tree, TreeStyle, TextFace, SeqGroup
+#import random
+from ete2 import Tree, TreeStyle, TextFace, SeqGroup, NodeStyle
 from subprocess import call
 from scipy.optimize import fmin
 from scipy.optimize import fmin_powell
 from scipy.optimize import fmin_l_bfgs_b
 from scipy.optimize import fmin_tnc
 from scipy import stats
+import matplotlib.pyplot as plt
+
+class um_tree:
+	def __init__(self, tree):
+		self.tree = Tree(tree, format = 1)
+		self.tree.dist = 0
+		self.tree.add_feature("age", 0)
+		self.nodes = self.tree.get_descendants()
+		internal_node = []
+		cnt = 0
+		for n in self.nodes:
+			node_age = n.get_distance(self.tree)
+			n.add_feature("age", node_age)
+			if not n.is_leaf():
+				n.add_feature("id", cnt)
+				cnt = cnt + 1
+				internal_node.append(n)
+		self.nodes = internal_node
+		one_leaf = self.tree.get_farthest_node()[0]
+		one_leaf.add_feature("id", cnt+1)
+		if one_leaf.is_leaf():
+			self.nodes.append(one_leaf)
+		self.nodes.sort(key=self.__compare_node)
+		self.species_list = []
+		self.coa_roots = None
+
+
+	def __compare_node(self, node):
+		return node.age
+
+
+	def get_waiting_times(self, threshold_node = None, threshold_node_idx = 0):
+		wt_list = []
+		reach_t = False
+		curr_age = 0.0
+		curr_spe = 2
+		curr_num_coa = 0
+		coa_roots = []
+		min_brl = 1000
+		num_spe = -1
+		
+		if threshold_node == None:
+			threshold_node = self.nodes[threshold_node_idx]
+		
+		last_coa_num = 0
+		tcnt = 0 
+		for node in self.nodes:
+			wt = None
+			times = node.age - curr_age
+			if times >= 0:
+				if times < min_brl and times > 0:
+					min_brl = times
+				curr_age = node.age
+				assert curr_spe >=0
+				 
+				if reach_t:
+					if tcnt == 0:
+						last_coa_num = 2
+					fnode = node.up
+					coa_root = None
+					
+					idx = 0
+					while not fnode.is_root():
+						idx = 0 
+						for coa_r in coa_roots:
+							if coa_r.id == fnode.id:
+								coa_root = coa_r
+								break
+							idx = idx + 1
+						
+						if coa_root!=None:
+							break
+						else:
+							fnode = fnode.up
+							
+					wt = waiting_time(length = times, num_coas =curr_num_coa, num_lines = curr_spe)
+					
+					for coa_r in coa_roots:
+						coa = coalescent(num_individual = coa_r.curr_n)
+						wt.coas.add_coalescent(coa)
+					
+					wt.coas.coas_idx = last_coa_num
+					wt.num_curr_coa = last_coa_num
+					if coa_root == None: #here can be modified to use multiple T
+						curr_spe = curr_spe - 1
+						curr_num_coa = curr_num_coa + 1
+						node.add_feature("curr_n", 2)
+						coa_roots.append(node)
+						last_coa_num = 2
+					else:
+						curr_n = coa_root.curr_n
+						coa_root.add_feature("curr_n", curr_n + 1)
+						last_coa_num = curr_n + 1
+					tcnt = tcnt + 1
+				else:
+					if node.id == threshold_node.id:
+						reach_t = True
+						tcnt = 0 
+						wt = waiting_time(length = times, num_coas = 0, num_lines = curr_spe)
+						num_spe = curr_spe
+						curr_spe = curr_spe - 1
+						curr_num_coa = 2
+						node.add_feature("curr_n", 2)
+						coa_roots.append(node)
+					else:
+						wt = waiting_time(length = times, num_coas = 0, num_lines = curr_spe)
+						curr_spe = curr_spe + 1
+				if times > 0:
+					wt_list.append(wt)
+		
+		if min_brl < 0.0001:
+			min_brl = 0.0001
+		
+		for wt in wt_list:
+			wt.count_num_lines()
+		
+		self.species_list = []
+		all_coa_leaves = []
+		self.coa_roots = coa_roots
+		for coa_r in coa_roots:
+			leaves = coa_r.get_leaves()
+			all_coa_leaves.extend(leaves)
+			self.species_list.append(leaves)
+		
+		all_leaves = self.tree.get_leaves()
+		for leaf in all_leaves:
+			if leaf not in all_coa_leaves:
+				self.species_list.append([leaf])
+		
+		return wt_list, num_spe
+
+
+	def show(self, wt_list):
+		cnt = 1
+		for wt in wt_list:
+			print("Waitting interval "+ repr(cnt))
+			print(wt)
+			cnt = cnt + 1
+			
+	
+	def get_species(self):
+		sp_list = []
+		for sp in self.species_list:
+			spe = []
+			for taxa in sp:
+				spe.append(taxa.name)
+			sp_list.append(spe)
+		
+		all_taxa_name = []
+		
+		#elf.tree.convert_to_ultrametric(tree_length = 1.0, strategy='balanced')
+		
+		for leaf in self.tree.get_leaves():
+			all_taxa_name.append(leaf.name)
+		
+		
+		style0 = NodeStyle()
+		style0["fgcolor"] = "#000000"
+		#style2["shape"] = "circle"
+		style0["vt_line_color"] = "#0000aa"
+		style0["hz_line_color"] = "#0000aa"
+		style0["vt_line_width"] = 4
+		style0["hz_line_width"] = 4
+		style0["vt_line_type"] = 0 # 0 solid, 1 dashed, 2 dotted
+		style0["hz_line_type"] = 0
+		style0["size"] = 0
+		
+		for node in self.tree.get_descendants():
+			node.set_style(style0)
+			node.img_style["size"] = 0
+		self.tree.set_style(style0)
+		self.tree.img_style["size"] = 0
+		
+		
+		style1 = NodeStyle()
+		style1["fgcolor"] = "#000000"
+		#style2["shape"] = "circle"
+		style1["vt_line_color"] = "#ff0000"
+		style1["hz_line_color"] = "#0000aa"
+		style1["vt_line_width"] = 2
+		style1["hz_line_width"] = 4
+		style1["vt_line_type"] = 1 # 0 solid, 1 dashed, 2 dotted
+		style1["hz_line_type"] = 0
+		style1["size"] = 0
+		
+		style2 = NodeStyle()
+		style2["fgcolor"] = "#0f0f0f"
+		#style2["shape"] = "circle"
+		style2["vt_line_color"] = "#ff0000"
+		style2["hz_line_color"] = "#ff0000"
+		style2["vt_line_width"] = 2
+		style2["hz_line_width"] = 2
+		style2["vt_line_type"] = 1 # 0 solid, 1 dashed, 2 dotted
+		style2["hz_line_type"] = 1
+		style2["size"] = 0
+		
+		for node in self.coa_roots:
+			node.set_style(style1)
+			node.img_style["size"] = 0
+			for des in node.get_descendants():
+				des.set_style(style2)
+				des.img_style["size"] = 0
+		
+		return [all_taxa_name], sp_list
+	
+	def print_species(self):
+		cnt = 1
+		for sp in self.species_list:
+			print("Species " + repr(cnt) + ":")
+			cnt = cnt + 1
+			taxas = ""
+			for taxa in sp:
+				taxas = taxas + taxa.name + ", "
+			print("	" + taxas[:-1])
+			
+	def num_lineages(self, wt_list):
+		nl_list = []
+		times = []
+		last_time = 0.0
+		for wt in wt_list:
+			nl_list.append(wt.get_num_branches())
+			times.append(last_time)
+			last_time = wt.length + last_time
+		
+		plt.plot(times, nl_list)
+		plt.ylabel('Number of lineages')
+		plt.xlabel('Time')
+		plt.savefig("Time_Lines")
+		plt.show()
+
 
 class lh_ratio_test:
 	def __init__(self, null_llh, llh, df):
@@ -160,6 +389,12 @@ class waiting_time:
 			self.num_lines = self.num_lines + coa.num_individual
 		self.num_lines = self.num_lines * (self.num_lines - 1)
 		
+	def get_num_branches(self):
+		nbr = 0
+		for coa in self.coas.coa_list:
+			nbr = nbr + coa.num_individual
+		nbr = nbr + self.spe.num_lineages
+		return nbr
 	
 	def __str__(self):
 		s = "Waitting time = " + repr(self.length) + "\n"
@@ -256,12 +491,13 @@ class tree_time:
 	def sum_llh(self):
 		self.llh = 0.0
 		for w_time in self.w_time_list:
-			if w_time.logl() == None:
+			logl = w_time.logl()
+			if logl == None:
 				self.llh = -sys.float_info.max
 				print("wtime logl infinity!!")
 				break
 			else:
-				self.llh = self.llh + w_time.logl()
+				self.llh = self.llh + logl
 		return self.llh
 	
 	def update(self, spe_p, coa_p):
@@ -303,8 +539,8 @@ class tree_time:
 		return bp
 
 
-#The null model using Coalescent
 class null_model:
+	"""The null model using Coalescent"""
 	def __init__(self, wt_list, tree):
 		nodes = tree.get_leaves()
 		self.num_speEvent = len(nodes) - 1
@@ -360,12 +596,14 @@ def optimize_null_model(umtree):
 	return last_llh
 
 
-def optimize_all(tree, print_detail = False):
+def gmyc(tree, print_detail = False):
+	llh_list = []
 	min_change = 0.1
 	max_iters = 100
 	best_llh = float("-inf")
 	best_num_spe = -1
-	utree = Ultrametric_tree.um_tree(tree)
+	best_node = None
+	utree = um_tree(tree)
 	for tnode in utree.nodes:
 		wt_list, num_spe = utree.get_waiting_times(threshold_node = tnode)
 		tt = tree_time(wt_list, num_spe)
@@ -375,13 +613,12 @@ def optimize_all(tree, print_detail = False):
 		
 		while change > min_change and cnt < max_iters:
 			cnt = cnt + 1
-			para, nn, cc = fmin_l_bfgs_b(tar_fun, [1, 1], args = [tt], disp = False, bounds = [[0, 100], [0, 100]], approx_grad = True)
+			para, nn, cc = fmin_l_bfgs_b(tar_fun, [1, 1], args = [tt], disp = False, bounds = [[0, 10], [0, 10]], approx_grad = True)
 			#para, nn, cc = fmin_tnc(tar_fun, [0, 0], args = [tt], disp = False, bounds = [[0, 10], [0, 10]], approx_grad = True)
-			#para, nn, cc = fmin_tnc(tar_fun, [1.0, 1.0], args = [tt], disp = False, bounds = [[0, 10], [0, 10]], fprime = prime_fun ) #, approx_grad = True)
 			tt.update(para[0], para[1])
-			
-			change = abs(tt.sum_llh() - last_llh)
-			last_llh = tt.sum_llh()
+			logl = tt.sum_llh()
+			change = abs(logl - last_llh)
+			last_llh = logl
 		
 		if print_detail:
 			print("Num spe:" + repr(num_spe) + ": " + repr(tt.sum_llh()))
@@ -390,9 +627,12 @@ def optimize_all(tree, print_detail = False):
 			print("spe_p:" + repr(tt.spe_p))
 			print("coa_p:" + repr(tt.coa_p))
 			print("-----------------------------------------------------")
-		if tt.sum_llh() > best_llh:
-			best_llh = tt.sum_llh()
+		final_llh = tt.sum_llh()
+		if final_llh > best_llh:
+			best_llh = final_llh
 			best_num_spe = num_spe
+			best_node = tnode
+		llh_list.append(final_llh)
 			
 	print("Highest llh:" + repr(best_llh))
 	print("Num spe:" + repr(best_num_spe))
@@ -400,21 +640,38 @@ def optimize_all(tree, print_detail = False):
 	null_logl = optimize_null_model (utree)
 	print("Null llh:" + repr(null_logl))
 	
+	wt_list, num_spe = utree.get_waiting_times(threshold_node = best_node)
+	utree.print_species()
+	one_spe, spes = utree.get_species()
+	
 	lrt = lh_ratio_test(null_llh = null_logl, llh = best_llh, df = 2)
 	print("P-value:" + repr(lrt.get_p_value()))
+	#print(llh_list)
+	
+	utree.num_lineages(wt_list)
+	
+	plt.plot(llh_list)
+	plt.ylabel('Log likelihood')
+	plt.xlabel('Time')
+	plt.savefig("Likelihood")
+	plt.show()
+	
+	#ts = TreeStyle()
+	#ts.force_topology = True
+	utree.tree.show()
 	if lrt.get_p_value() >= 0.5:
-		return 0
+		return one_spe
 	else:
-		return best_num_spe
+		return spes
 
 
 if __name__ == "__main__":
 	if len(sys.argv) != 3: 
 		print("usage: ./GMYC.py <um_tree.tre>  <print p/n>")
 		sys.exit()
-	if sys.argv[1] == "p":
-		optimize_all(sys.argv[1], print_detail = True)
+	if sys.argv[2] == "p":
+		gmyc(sys.argv[1], print_detail = True)
 	else:
-		optimize_all(sys.argv[1])
+		gmyc(sys.argv[1])
 
 

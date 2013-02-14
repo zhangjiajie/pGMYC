@@ -112,16 +112,6 @@ class species_setting:
 				one_spe.append(node)
 			else:
 				one_spe.extend(node.get_leaves())
-				"""
-				childs = node.get_children()
-				
-				for child in childs:
-					if not child in self.spe_nodes:
-						if child.is_leaf():
-							one_spe.append(child)
-						else:
-							one_spe.extend(child.get_leaves())
-				"""
 			self.spe_list.append(one_spe)
 		return len(self.spe_list), self.spe_list
 
@@ -140,6 +130,7 @@ class exponential_mixture:
 		self.species_list = None
 		self.counter = 0
 		self.setting_set = set([])
+		self.max_setting = 10000
 	
 	def null_model(self):
 		coa_br = []
@@ -176,20 +167,11 @@ class exponential_mixture:
 	
 	def next(self, sp_setting):
 		self.setting_set.add(frozenset(sp_setting.spe_nodes))
-		self.counter = self.counter + 1
-		#print("Search No. :" + repr(self.counter))
 		logl = sp_setting.get_log_l()
-		#print(logl)
 		if logl > self.max_logl:
 			self.max_logl = logl
 			self.max_setting = sp_setting
-			
-		#print("Num active nodes:" + repr(len(sp_setting.active_nodes)))
-		#print sp_setting.active_nodes
-		cnt = 1
 		for node in sp_setting.active_nodes:
-			#print(cnt)
-			cnt = cnt + 1
 			if node.is_leaf():
 				pass
 			else:
@@ -205,7 +187,7 @@ class exponential_mixture:
 				else:
 					self.next(new_sp_setting)
 		
-	def search(self, reroot = False):
+	def search(self, reroot = False, reroot_node = None):
 		if reroot:
 			self.re_rooting()
 		first_node_list = []
@@ -230,9 +212,11 @@ class exponential_mixture:
 			print("P-value:" + repr(pvalue))
 		if pvalue < 0.001:
 			num_sp, self.species_list = self.max_setting.count_species()
-			self.fix_spe_rate = False
-			self.max_logl = float("-inf") 
-			self.search()
+			
+			#when there are more than one speces, should do sth to make the results better?
+			#self.fix_spe_rate = False
+			#self.max_logl = float("-inf") 
+			#self.search()
 			return num_sp
 		else:
 			self.species_list = []
