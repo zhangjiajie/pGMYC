@@ -162,7 +162,7 @@ class um_tree:
 		
 		all_taxa_name = []
 		
-		#elf.tree.convert_to_ultrametric(tree_length = 1.0, strategy='balanced')
+		#self.tree.convert_to_ultrametric(tree_length = 1.0, strategy='balanced')
 		
 		for leaf in self.tree.get_leaves():
 			all_taxa_name.append(leaf.name)
@@ -173,8 +173,8 @@ class um_tree:
 		#style2["shape"] = "circle"
 		style0["vt_line_color"] = "#0000aa"
 		style0["hz_line_color"] = "#0000aa"
-		style0["vt_line_width"] = 4
-		style0["hz_line_width"] = 4
+		style0["vt_line_width"] = 2
+		style0["hz_line_width"] = 2
 		style0["vt_line_type"] = 0 # 0 solid, 1 dashed, 2 dotted
 		style0["hz_line_type"] = 0
 		style0["size"] = 0
@@ -192,8 +192,8 @@ class um_tree:
 		style1["vt_line_color"] = "#ff0000"
 		style1["hz_line_color"] = "#0000aa"
 		style1["vt_line_width"] = 2
-		style1["hz_line_width"] = 4
-		style1["vt_line_type"] = 1 # 0 solid, 1 dashed, 2 dotted
+		style1["hz_line_width"] = 2
+		style1["vt_line_type"] = 0 # 0 solid, 1 dashed, 2 dotted
 		style1["hz_line_type"] = 0
 		style1["size"] = 0
 		
@@ -204,8 +204,8 @@ class um_tree:
 		style2["hz_line_color"] = "#ff0000"
 		style2["vt_line_width"] = 2
 		style2["hz_line_width"] = 2
-		style2["vt_line_type"] = 1 # 0 solid, 1 dashed, 2 dotted
-		style2["hz_line_type"] = 1
+		style2["vt_line_type"] = 0 # 0 solid, 1 dashed, 2 dotted
+		style2["hz_line_type"] = 0
 		style2["size"] = 0
 		
 		for node in self.coa_roots:
