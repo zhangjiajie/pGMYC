@@ -310,7 +310,66 @@ class exponential_mixture:
 
 
 	def H3(self, reroot = True):
-		pass
+		sorted_node_list = self.tree.get_descendants()
+		sorted_node_list.sort(key=self.__compare_node)
+		sorted_node_list.reverse()
+		sorted_br = []
+		for node in sorted_node_list:
+			sorted_br.append(node.dist)
+		maxlogl = float("-inf") 
+		maxidx = -1
+		for i in range(len(sorted_node_list))[1:]:
+			l1 = sorted_br[0:i]
+			l2 = sorted_br[i:]
+			e1 = exp_distribution(l1)
+			e2 = exp_distribution(l2)
+			logl = e1.sum_log_l() + e2.sum_log_l()
+			if logl > maxlogl:
+				maxidx = i
+				maxlogl = logl
+		
+		target_nodes = sorted_node_list[0:maxidx]
+		
+		first_node_list = []
+		first_node_list.append(self.tree)
+		first_childs = self.tree.get_children()
+		for child in first_childs:
+			first_node_list.append(child)
+		first_setting = species_setting(spe_nodes = first_node_list, root = self.tree, sp_rate = self.fix_spe, fix_sp_rate = self.fix_spe_rate)
+		last_setting = first_setting
+		max_logl = last_setting.get_log_l()
+		max_setting = last_setting
+		contin_flag = True 
+		
+		while contin_flag:
+			curr_max_logl = float("-inf") 
+			curr_max_setting = None
+			contin_flag = False
+			for node in last_setting.active_nodes:
+				if node.is_leaf():
+					pass
+				else:
+					contin_flag = True 
+					childs = node.get_children()
+					sp_nodes = []
+					flag = False
+					for child in childs:
+						if child in target_nodes:
+							flag = True:
+					if flag:
+						for child in childs:
+							sp_nodes.append(child)
+						for nod in last_setting.spe_nodes:
+							sp_nodes.append(nod)
+						new_sp_setting = species_setting(spe_nodes = sp_nodes, root = self.tree, sp_rate = self.fix_spe, fix_sp_rate = self.fix_spe_rate)
+						logl = new_sp_setting.get_log_l()
+						if logl > max_logl:
+							max_logl = logl
+							max_setting = new_sp_setting
+						last_setting = new_sp_setting
+				#TODO start here!
+				
+		
 
 
 	def Brutal(self, reroot = False): #, reroot_node = None):
