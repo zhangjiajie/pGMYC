@@ -1,0 +1,23 @@
+#NEXUS 
+
+Begin trees;  
+
+tree PAUP_1 = (Marchantia:0.016035,(((((Encephal:0.003330,Cycas:0.004697):0.007933,Ginkgo:0.009282):0.001426,(((Welwitsch:0.016612,Ephedra:0.017398):0.017553,Pinus:0.017575):0.007350,(Araucaria:0.006931,Torreya:0.008327):0.001321):0.002426):0.006656,((Drimys:0.004681,(Pisum:0.013891,Nicotiana:0.003934):0.003565):0.003831,(Zea:0.005239,Oryza:0.006843):0.012653):0.019542):0.018001,(((Equisetum:0.025703,Adiantum:0.044400):0.006693,Angiopter:0.012236):0.003360,Psilotum:0.027071):0.007160):0.006285,Huperzia:0.025406);
+End;
+
+begin r8s;
+blformat nsites=2530 lengths=persite;
+prune taxon=marchantia; [Marchantia was used as an outgroup to obtain ingroup branch
+			lengths; can prune it now]
+mrca lp huperzia ephedra; [...misc. node names]
+mrca sp cycas ephedra pinus drimys;
+mrca ag drimys pisum zea;
+mrca gn welwitsch ephedra;
+
+collapse;
+fixage taxon=lp age=420;
+set ftol=1e-7 maxiter=2000; [good parameters for QNEWT]
+set verbose=0; [suppresses huge amount of output in CV analyses]
+divtime method=pl algorithm=qnewt cvStart=0 cvInc=0.5 cvNum=8 crossv=yes;
+
+end;

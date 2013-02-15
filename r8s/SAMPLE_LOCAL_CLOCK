@@ -1,0 +1,82 @@
+#NEXUS 
+
+[
+** A sample data set illustrating use of divergence time estimators in r8s,
+** under the assumption of a local clock model. Here the Gnetales clade is
+** given one rate; everything else has a different rate. Notice that the stem
+** lineage of the Gnetales clade is included in the second rate category. Try 
+** an experiment of not including the stem ('stem=no')--this causes a dramatic
+** (pathological!) change in the answer. In other words, beware local clocks!
+]
+
+begin trees; 
+
+[
+** The following branch lengths were obtained from PAUP using maximum likelihood
+]
+
+tree PAUP_9 = [&U] (Marchantia:0.033817,(Lycopodium:0.040281,((Equisetum:0.048533,(Osmunda:0.033640,Asplenium:0.036526):0.000425):0.011806,((((Cycas:0.009460,Zamia:0.018847):0.005021,Ginkgo:0.014702):1.687e-86,((Pinus:0.021500,(Podocarpac:0.015649,Taxus:0.021081):0.006473):0.002448,(Ephedra:0.029965,(Welwitsch:0.011298,Gnetum:0.014165):0.006883):0.016663):0.006309):0.010855,((Nymphaea:0.016835,(((((Saururus:0.019902,Chloranth:0.020151):1.687e-86,((Araceae:0.020003,(Palmae:0.006005,Oryza:0.031555):0.002933):0.007654,Acorus:0.038488):0.007844):1.777e-83,(Calycanth:0.013524,Lauraceae:0.035902):0.004656):1.687e-86,((Magnolia:0.015119,Drimys:0.010172):0.005117,(Ranunculus:0.029027,((Nelumbo:0.006180,Platanus:0.002347):0.003958,(Buxaceae:0.013294,((Pisum:0.035675,(Fagus:0.009848,Carya:0.008236):0.001459):0.001994,(Ericaceae:0.019136,Solanaceae:0.041396):0.002619):1.687e-86):0.004803):1.687e-86):0.006457):0.002918):0.007348,Austrobail:0.019265):1.687e-86):1.687e-86,Amborella:0.019263):0.003527):0.021625):0.012469):0.019372);
+End;
+
+
+[** Beginning of the rates block containing commands for r8s **]
+
+begin rates;
+
+[** r8s expects branch lengths to be integers corresponding to 
+ **expected numbers of substitutions. If, instead, branch lengths are supplied on a per site basis,
+ ** we use this command to multiply by the length of the sequence 
+ **]
+
+blformat nsites= 952 lengths=persite;
+[multiply_branchlength_by 952; ]
+
+[** The algorithms have difficulty with zero-length branches (as do other programs estimating ages);
+ ** this next command turns such instances into hard polytomies
+ **]
+
+collapse;
+
+[** These are a series of definitions of names of internal nodes of the tree,
+ ** which are useful for later reference.
+ ** These can also be supplied explicitly in the tree description above, as per nexus format.
+ ** ]
+
+mrca LP marchantia pisum;
+mrca ANGIO amborella pisum;
+
+mrca VP lycopodium pisum;
+mrca V1 Equisetum pisum;
+mrca FERN Osmunda Asplenium;
+mrca SP Ginkgo pisum;
+mrca GYMNO Ginkgo Gnetum;
+mrca CYC Cycas Zamia;
+mrca G2 Taxus Podocarpac;
+mrca GNET Ephedra Gnetum;
+
+mrca CL Calycanth Lauraceae;
+mrca ChS Chloranth Saururus;
+mrca MON Acorus Oryza;
+mrca PO Palmae Oryza;
+mrca MAG Magnolia Drimys;
+mrca EUD Ranunculus Carya;
+mrca NEL Nelumbo Platanus;
+mrca BX Buxaceae Carya;
+mrca ERIC Ericaceae Solanaceae;
+mrca FC Fagus Carya;
+
+
+
+[** We can explicitly force any node in the tree to have a fixed age,
+ ** which will not be estimated by the algorithms. In simple searches,
+ ** it is necessary to have at least one internal node's age set; otherwise
+ ** we cannot estimate any absolute times. One can set the root to an age of 1.0
+ ** if it is sufficient to estimate ages relative to the root.
+ **]
+
+fixage taxon=LP age=450;
+localmodel taxon=gnet stem=yes rateindex=1;
+
+divtime method=lf algorithm=powell nrates=2;
+
+end;

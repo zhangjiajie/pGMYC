@@ -356,6 +356,38 @@ def mix_exp_model(nfin_tree_list, nfin_ref_tree = None):
 def dppdiv():
 	#"./dppdiv-pthreads-sse3 -T 4 -in testdata/sample.phy -tre testdata/sample.tree -cal testdata/sample.cal -n 1000 -out output/sample"
 	pass
+	
+def r8s(sfin_tree, sfout):
+	#r8s/r8s -b -f datafile
+	t = Tree(sfin_tree, format = 1 )
+	tree_str = t.write(format=5)
+	leaf_names = t.get_leaf_names()
+	r8s_data_file = sfin_tree + ".r8s.temp"
+	fout = open(r8s_data_file, "w")
+	fout.write("#nexus\n")
+	fout.write("begin trees;\n")
+	fout.write("tree single_Haplo = " + tree_str + "\n")
+	fout.write("end;\n")
+	fout.write("\n")
+	fout.write("begin r8s;\n")
+	fout.write("blformat lengths=persite nsites=1000 ultrametric=no;\n")
+	fout.write("mrca root " + leaf_names[0] + " " + leaf_names[1] + ";\n")
+	fout.write("fixage taxon=root age=100;\n")
+	fout.write("divtime method=pl algorithm=tn;\n")
+	fout.write("set smoothing=0.001 penalty=log checkGradient=yes;\n")
+	fout.write("describe plot=chrono_description;\n")
+	fout.write("end;\n")
+	fout.close()
+	call(["r8s/r8s","-b","-f",r8s_data_file], stdout=open("r8slog", "w"), stderr=subprocess.STDOUT)
+	fin = open("r8slog")
+	lines = fin.readlines()
+	trees = lines[-1]
+	trees = trees.split("=")[1].strip()
+	fin.close()
+	fout = open(sfout, "w")
+	fout.write(trees + "\n")
+	fout.close()
+	return sfout
 
 #step6: batch test
 def batch_test(folder="./", suf = "phy", num_spe_tree = 10):
@@ -410,7 +442,8 @@ def batch_test(folder="./", suf = "phy", num_spe_tree = 10):
 
 if __name__ == "__main__":
 	
-	batch_test(folder="./", suf = "phy", num_spe_tree = 10)
+	r8s(sfin_tree = "test.tree.tre", sfout = "r8sout")
+	#batch_test(folder="./", suf = "phy", num_spe_tree = 10)
 	#pre_pro_aln(nfin="pv.phy", nfout="jz.phy")
 	#sys.exit()
 	
