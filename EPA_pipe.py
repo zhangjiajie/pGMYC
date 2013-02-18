@@ -40,6 +40,7 @@ def token(tree):
 			curridx = curridx + 1
 	return tks
 
+
 def grab_sub_tree(tree, leafs):
 	tks = token(tree)
 	#stak = deque()
@@ -87,8 +88,7 @@ def grab_sub_tree(tree, leafs):
 		subs.appendleft("(")
 	
 	print("".join(subs))
-	
-	
+
 
 def gen_alignment(seq_names = [], alignment = SeqGroup(), outputfile = "epa_parser_alignments.out"):
 	"""generate alignment from the input taxa name list - seq_name, and SeqGroup - alignment"""
@@ -98,6 +98,7 @@ def gen_alignment(seq_names = [], alignment = SeqGroup(), outputfile = "epa_pars
 		newalign.set_seq(taxa, seq)
 	newalign.write(format='iphylip_relaxed', outfile = outputfile)
 	return outputfile
+
 
 #step0: pre-process simulated alignment:
 def pre_pro_aln(nfin, nfout):
@@ -112,6 +113,7 @@ def pre_pro_aln(nfin, nfout):
 	os.remove(nfin)
 	os.rename(nfout, nfin)
 	return nfin
+
 
 #step1: extract ref alignment
 def extract_ref_alignment(nfin, nfout, num_prune = 0):
@@ -150,15 +152,16 @@ def build_ref_tree(nfin, nfout):
 	os.remove("RAxML_result." + nfout)
 	return nfout + ".tre"
 
+
 #build tree with -g
 def build_constrain_tree(nsfin, ntfin, nfout):
 	call(["raxmlHPC-SSE3","-m","GTRGAMMA","-s",nsfin, "-g", ntfin, "-n",nfout,"-p", "1234"], stdout=open(os.devnull, "w"), stderr=subprocess.STDOUT)
-	#call(["raxmlHPC-SSE3","-m","GTRGAMMA","-s",nsfin, "-g", ntfin, "-n", nfout, "-p", "123"])
 	os.rename("RAxML_bestTree."+nfout, nfout + ".tre")
 	os.remove("RAxML_info." + nfout)
 	os.remove("RAxML_log." + nfout)
 	os.remove("RAxML_result." + nfout)
 	return nfout + ".tre"
+
 
 #step3: run EPA
 def run_EPA(nfin_aln, nfin_tree, nfout):
@@ -171,7 +174,7 @@ def run_EPA(nfin_aln, nfin_tree, nfout):
 	os.remove("RAxML_labelledTree." + nfout)
 	os.remove("RAxML_originalLabelledTree." + nfout)
 	return nfout + ".jplace"
-	
+
 
 #step4: extrac EPA placement & build the phylogenetic tree
 def extract_placement(nfin_place, nfin_aln, nfout):
@@ -214,7 +217,8 @@ def extract_placement(nfin_place, nfin_aln, nfout):
 	
 	return num_epa_edges, aln_fnames, tre_fnames
 
-#step4: extrac EPA placement & build the phylogenetic tree
+
+#step4: extrac EPA placement & build the phylogenetic tree -g option
 def extract_placement2(nfin_place, nfin_aln, nfout):
 	jsondata = open (nfin_place)
 	align_orgin = SeqGroup(sequences = nfin_aln, format="phylip_relaxed")
@@ -259,7 +263,6 @@ def extract_placement2(nfin_place, nfin_aln, nfout):
 			#genrate the newwick string to be inserted into the ref tree
 			multi_fcating = "("
 			for seqname in seqset:
-				#multi_fcating = multi_fcating + "," + seqname
 				multi_fcating = multi_fcating + seqname + ","
 			multi_fcating = multi_fcating[:-1] 
 			multi_fcating = "{" + repr(seqset_name) + "}," + multi_fcating + ")"
@@ -317,10 +320,10 @@ def estimate_ref_exp_rate(nfin):
 	ref_model = EXP.mix_exp(tree = nfin)
 	spe_rate = ref_model.init_tree()
 	return spe_rate
-	
+
 
 #step5: test mix_exp model
-def mix_exp_model(nfin_tree_list, nfin_ref_tree = None):
+def mix_exp_model(nfin_tree_list, nfin_ref_tree = None, re_root = True):
 	spe_rate = -1
 	spe_num_list = []
 	true_spe_num_list = []
@@ -330,33 +333,30 @@ def mix_exp_model(nfin_tree_list, nfin_ref_tree = None):
 	for ntre in nfin_tree_list:
 		epa_exp = None
 		if spe_rate > 0:
-			#epa_exp = EXP.mix_exp(ntre, sp_rate = spe_rate, fix_sp_rate = True)
 			epa_exp = EXP.exponential_mixture(ntre, sp_rate = spe_rate, fix_sp_rate = True)
 		else:
-			#epa_exp = EXP.mix_exp(ntre)
 			epa_exp = EXP.exponential_mixture(ntre)
 			
-		epa_exp.search(reroot = True)
+		epa_exp.search(reroot = re_root, strategy = "Brutal")
 		num_spe = epa_exp.count_species(print_log = False)
+		
 		spe_num_list.append(num_spe)
 		leaves = epa_exp.tree.get_leaves()
-		
 		true_spe = set([leaves[0].name.split(".")[0]])
 		for leaf in leaves:
 			true_spe.add(leaf.name.split(".")[0])
 		true_spe_num = len(true_spe)
-		print("True num spe for " + ntre + "  :" + repr(true_spe_num))
 		true_spe_num_list.append(true_spe_num)
 		
 	
 	return spe_num_list, true_spe_num_list
-	
 
 
 def dppdiv():
 	#"./dppdiv-pthreads-sse3 -T 4 -in testdata/sample.phy -tre testdata/sample.tree -cal testdata/sample.cal -n 1000 -out output/sample"
 	pass
-	
+
+
 def r8s(sfin_tree, sfout):
 	#r8s/r8s -b -f datafile
 	t = Tree(sfin_tree, format = 1 )
@@ -389,8 +389,13 @@ def r8s(sfin_tree, sfout):
 	fout.close()
 	return sfout
 
-#step6: batch test
-def batch_test(folder="./", suf = "phy", num_spe_tree = 10):
+
+def gmyc_model(nfin_tree_list, nfin_ref_tree = None, re_root = False):
+	
+
+
+#step6: batch test normal me
+def batch_test_me(folder="./", suf = "phy", num_spe_tree = 10):
 	phyl = glob.glob(folder + "*." + suf)
 	num_tre = len(phyl)
 	num_err_exp = 0
@@ -408,8 +413,8 @@ def batch_test(folder="./", suf = "phy", num_spe_tree = 10):
 		sp_num_l, true_sp_num_l = mix_exp_model(tres, nfin_ref_tree = fin3)
 		for aln in alns:
 			os.remove(aln)
-		#for tre in tres:
-		#	os.remove(tre)
+		for tre in tres:
+			os.remove(tre)
 		jk1 = glob.glob("*.reduced")
 		for jkfile in jk1:
 			os.remove(jkfile)
@@ -428,7 +433,7 @@ def batch_test(folder="./", suf = "phy", num_spe_tree = 10):
 		
 		os.remove("temp2.phy")
 		os.remove("temp3.tre")
-		#os.remove("p3.jplace")
+		os.remove("p3.jplace")
 		print("Testing file: " + phy + ", accu num errors exp:" + repr(num_err_exp))
 	
 	err_rate_epa = float(num_err_epa) / float(num_spe_tree * num_tre)
@@ -438,12 +443,72 @@ def batch_test(folder="./", suf = "phy", num_spe_tree = 10):
 	print("Errors made by EPA: " + repr(num_err_epa) + "	" + repr(err_rate_epa))
 	print("Errors made by EXP: " + repr(num_err_exp) + "	" + repr(err_rate_exp))
 	print("Correct EXP estimate: " + repr(num_correct) + "	" + repr(correct_rate))
-		 
+
+
+#step6: batch test me using -g
+def batch_test_me_g(folder="./", suf = "phy", num_spe_tree = 10):
+	phyl = glob.glob(folder + "*." + suf)
+	num_tre = len(phyl)
+	num_err_exp = 0
+	num_err_epa = 0
+	num_correct = 0
+	num_placement = 0
+	true_num_sp = 0 
+	for phy in phyl:
+		fin1 = pre_pro_aln(nfin=phy, nfout="temp1")
+		fin2 = extract_ref_alignment(nfin = fin1 , nfout = "temp2.phy", num_prune = 2)
+		fin3 = build_ref_tree(nfin = fin2, nfout = "temp3")
+		fin4 = run_EPA(nfin_aln =fin1 , nfin_tree=fin3 , nfout="p3")
+		num_e, alns, tres = extract_placement2(nfin_place = fin4, nfin_aln = fin1, nfout = "p4")
+		num_placement = num_placement + num_e
+		sp_num_l, true_sp_num_l = mix_exp_model(tres, nfin_ref_tree = fin3)
+		for aln in alns:
+			os.remove(aln)
+		for tre in tres:
+			os.remove(tre)
+		jk1 = glob.glob("*.reduced")
+		for jkfile in jk1:
+			os.remove(jkfile)
+		num_diff_epa = num_e - num_spe_tree
+		if num_diff_epa > 0:
+			num_err_epa = num_err_epa + num_diff_epa
+		
+		for i in range(len(sp_num_l)):
+			num_err_exp = num_err_exp + sp_num_l[i] - true_sp_num_l[i]
+			true_num_sp = true_num_sp + true_sp_num_l[i]
+			if sp_num_l[i] == true_sp_num_l[i]:
+				num_correct = num_correct + 1
+				print("True: " + repr(true_sp_num_l[i]) + "  -- Predic: " + repr(sp_num_l[i]) )
+			else:
+				print("True: " + repr(true_sp_num_l[i]) + "  -- Predic: " + repr(sp_num_l[i]) )
+		
+		os.remove("temp2.phy")
+		os.remove("temp3.tre")
+		os.remove("p3.jplace")
+		print("Testing file: " + phy + ", accu num errors exp:" + repr(num_err_exp))
+	
+	err_rate_epa = float(num_err_epa) / float(num_spe_tree * num_tre)
+	err_rate_exp = float(num_err_exp) / float(num_spe_tree * num_tre)
+	correct_rate = float(num_correct) / float(num_placement)
+	
+	print("Errors made by EPA: " + repr(num_err_epa) + "	" + repr(err_rate_epa))
+	print("Errors made by EXP: " + repr(num_err_exp) + "	" + repr(err_rate_exp))
+	print("Correct EXP estimate: " + repr(num_correct) + "	" + repr(correct_rate))
+
+
+def batch_test_gmyc(folder="./", suf = "phy", num_spe_tree = 10):
+	phyl = glob.glob(folder + "*." + suf)
+	for phy in phyl:
+		fin1 = pre_pro_aln(nfin=phy, nfout="temp1")
+		fin2 = extract_ref_alignment(nfin = fin1 , nfout = "temp2.phy", num_prune = 2)
+		fin3 = build_ref_tree(nfin = fin2, nfout = "temp3")
+		fin4 = run_EPA(nfin_aln =fin1 , nfin_tree=fin3 , nfout="p3")
+		num_e, alns, tres = extract_placement2(nfin_place = fin4, nfin_aln = fin1, nfout = "p4")
 
 if __name__ == "__main__":
 	
-	r8s(sfin_tree = "test.tree.tre", sfout = "r8sout")
-	#batch_test(folder="./", suf = "phy", num_spe_tree = 10)
+	#r8s(sfin_tree = "test.tree.tre", sfout = "r8sout")
+	batch_test_me_g(folder="./", suf = "phy", num_spe_tree = 10)
 	#pre_pro_aln(nfin="pv.phy", nfout="jz.phy")
 	#sys.exit()
 	

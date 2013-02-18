@@ -1,10 +1,6 @@
 #! /usr/bin/env python
 import sys
-#import os
-#import json
-#import operator
 import math
-#import random
 from ete2 import Tree, TreeStyle, TextFace, SeqGroup, NodeStyle
 from subprocess import call
 from scipy.optimize import fmin
@@ -150,8 +146,8 @@ class um_tree:
 			print("Waitting interval "+ repr(cnt))
 			print(wt)
 			cnt = cnt + 1
-			
-	
+
+
 	def get_species(self):
 		sp_list = []
 		for sp in self.species_list:
@@ -216,7 +212,8 @@ class um_tree:
 				des.img_style["size"] = 0
 		
 		return [all_taxa_name], sp_list
-	
+
+
 	def print_species(self):
 		cnt = 1
 		for sp in self.species_list:
@@ -226,7 +223,8 @@ class um_tree:
 			for taxa in sp:
 				taxas = taxas + taxa.name + ", "
 			print("	" + taxas[:-1])
-			
+
+
 	def num_lineages(self, wt_list):
 		nl_list = []
 		times = []
@@ -596,7 +594,7 @@ def optimize_null_model(umtree):
 	return last_llh
 
 
-def gmyc(tree, print_detail = False):
+def gmyc(tree, print_detail = False, show_tree = False, show_llh = False, show_lineages = False, print_species = False):
 	llh_list = []
 	min_change = 0.1
 	max_iters = 100
@@ -633,45 +631,70 @@ def gmyc(tree, print_detail = False):
 			best_num_spe = num_spe
 			best_node = tnode
 		llh_list.append(final_llh)
-			
-	print("Highest llh:" + repr(best_llh))
-	print("Num spe:" + repr(best_num_spe))
 	
-	null_logl = optimize_null_model (utree)
-	print("Null llh:" + repr(null_logl))
+	null_logl = optimize_null_model(utree)
 	
 	wt_list, num_spe = utree.get_waiting_times(threshold_node = best_node)
-	utree.print_species()
 	one_spe, spes = utree.get_species()
-	
 	lrt = lh_ratio_test(null_llh = null_logl, llh = best_llh, df = 2)
+	
+	print("Highest llh:" + repr(best_llh))
+	print("Num spe:" + repr(best_num_spe))
+	print("Null llh:" + repr(null_logl))
 	print("P-value:" + repr(lrt.get_p_value()))
-	#print(llh_list)
 	
-	utree.num_lineages(wt_list)
+	if show_lineages:
+		utree.num_lineages(wt_list)
 	
-	plt.plot(llh_list)
-	plt.ylabel('Log likelihood')
-	plt.xlabel('Time')
-	plt.savefig("Likelihood")
-	plt.show()
+	if show_llh:
+		plt.plot(llh_list)
+		plt.ylabel('Log likelihood')
+		plt.xlabel('Time')
+		plt.savefig("Likelihood")
+		plt.show()
 	
-	#ts = TreeStyle()
-	#ts.force_topology = True
-	utree.tree.show()
+	if print_species:
+		utree.print_species()
+	
+	if show_tree:
+		utree.tree.show()
+	
 	if lrt.get_p_value() >= 0.5:
-		return one_spe
+		return len(one_spe)
 	else:
-		return spes
+		return len(spes)
 
 
 if __name__ == "__main__":
-	if len(sys.argv) != 3: 
-		print("usage: ./GMYC.py <um_tree.tre>  <print p/n>")
+	if len(sys.argv) < 3: 
+		print("usage: ./EXP.py -t <tree_of_life.tre> -pd(print detail)  -st(show tree)  -sl(show llh plot)  -sn(show lineage number plot)  -ps(print species)")
 		sys.exit()
-	if sys.argv[2] == "p":
-		gmyc(sys.argv[1], print_detail = True)
-	else:
-		gmyc(sys.argv[1])
+	stree = ""
+	sprint_detail = False 
+	sshow_tree = False 
+	sshow_llh = False 
+	sshow_lineages = False 
+	sprint_species = False
+	
+	for i in range(len(sys.argv)):
+		if sys.argv[i] == "-t":
+			i = i + 1
+			stree = sys.argv[i]
+		elif sys.argv[i] == "-pd":
+			sprint_detail = True
+		elif sys.argv[i] == "-st":
+			sshow_tree = True
+		elif sys.argv[i] == "-sl":
+			sshow_llh = True
+		elif sys.argv[i] == "-sn":
+			sshow_lineages = True
+		elif sys.argv[i] == "-ps":
+			sprint_species = True
+	
+	if stree == "":
+		print("usage: ./EXP.py -t <tree_of_life.tre> -pd(print detail)  -st(show tree)  -sl(show llh plot)  -sn(show lineage number plot)  -ps(print species)")
+		sys.exit()
+	
+	gmyc(tree = stree, print_detail = sprint_detail, show_tree = sshow_tree, show_llh = sshow_llh, show_lineages = sshow_lineages, print_species = sprint_species)
 
 
