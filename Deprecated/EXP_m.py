@@ -60,7 +60,7 @@ class exp_distribution:
 
 class species_setting:
 	def __init__(self, spe_nodes, root, sp_rate = 0, fix_sp_rate = False):
-		self.min_brl = 0.0001
+		self.min_brl = 0.00001
 		self.spe_rate = sp_rate
 		self.fix_spe_rate = fix_sp_rate
 		self.spe_nodes = spe_nodes
@@ -124,12 +124,93 @@ class species_setting:
 					one_spe.extend(node.get_leaf_names())
 				self.spe_list.append(one_spe)
 			return len(self.spe_list), self.spe_list
+			
+	
+	def seprate_rates(self):
+		self.rates = []
+		self.clut_anodes = []
+		for node in self.active_nodes:
+			if node.is_leaf():
+				pass
+			else:
+				brl = []
+				for nd in node.get_descendants():
+					if nd.dist > self.min_brl:
+						brl.append(nd.dist)
+				if len(brl) > 0:
+					e = exp_distribution(brl)
+					self.rates.append(e.rate)
+					self.clut_anodes.append(node)
+		print(self.rates)
+		return self.rates
+	
+	def multi_rates(self, k):
+		coa_logl = 0.0
+		if len(self.rates) == 0:
+			return coa_logl
+		elif len(self.rates) == 1:
+			anode = self.clut_anodes[0]
+			brls = []
+			if anode.is_leaf():
+					return 0.0
+			else:
+				for nd in anode.get_descendants():
+					if nd.dist > self.min_brl:
+						brls.append(nd.dist)
+			e = exp_distribution(brls)
+			return e.sum_log_l()
+		else:
+			features = array(self.rates)
+			km = Clustering.cluster(features, k)
+			labels = km.find_cluster()
+			c_brl_map = {}
+			c_e_map = {}
+			for lb in labels:
+				c_brl_map[lb] = []
+				c_e_map[lb] = None
+			for i in range(len(labels)):
+				anode = self.clut_anodes[i]
+				lb = labels[i]
+				brls = c_brl_map[lb]
+				if anode.is_leaf():
+					pass
+				else:
+					for nd in anode.get_descendants():
+						if nd.dist > self.min_brl:
+							brls.append(nd.dist)
+					c_brl_map[lb] = brls
+			
+			for key in c_brl_map.keys():
+				e = exp_distribution(c_brl_map[key])
+				coa_logl = coa_logl + e.sum_log_l()
+				
+			return coa_logl
+	
+	def get_log_l_mr(self, k):
+		if len(self.active_nodes) < k:
+			k = len(self.active_nodes)
+		self.seprate_rates()
+		coa_llh = self.multi_rates(k)
+		spe_br = []
+		for node in self.spe_nodes:
+			if node.dist > self.min_brl:
+				spe_br.append(node.dist)
+		e2 = None
+		if self.fix_spe_rate:
+			e2 = exp_distribution(spe_br, rate = self.spe_rate)
+		else:
+			e2 = exp_distribution(spe_br)
+		
+		
+		self.logl = coa_llh + e2.sum_log_l()
+		
+		return self.logl
 
 
 
 class exponential_mixture:
 	"""init(), search() and count_species()"""
-	def __init__(self, tree, sp_rate = 0, fix_sp_rate = False, max_iters = 20000, min_br = 0.0001):
+	def __init__(self, tree, sp_rate = 0, fix_sp_rate = False, max_iters = 20000, min_br = 0.0000001):
 		self.min_brl = min_br
 		self.tree = Tree(tree, format = 1)
 		self.tree.dist = 0.0
@@ -205,13 +286,13 @@ class exponential_mixture:
 					self.next(new_sp_setting)
 
 
-	def H0(self, reroot = True):
-		self.H1(reroot)
-		self.H2(reroot = False)
-		self.H3(reroot = False)
+	def H0(self, reroot = True, num_cluster = 1):
+		self.H1(reroot, num_cluster)
+		self.H2(reroot = False, k = num_cluster)
+		self.H3(reroot = False, k = num_cluster)
 
 
-	def H1(self, reroot = True):
+	def H1(self, reroot = True, k = 1):
 		if reroot:
 			self.re_rooting()
 			
@@ -226,8 +307,14 @@ class exponential_mixture:
 		for child in first_childs:
 			first_node_list.append(child)
 		first_setting = species_setting(spe_nodes = first_node_list, root = self.tree, sp_rate = self.fix_spe, fix_sp_rate = self.fix_spe_rate)
+		
 		last_setting = first_setting
-		max_logl = last_setting.get_log_l()
+		max_logl = None
+		if k < 2:
+			max_logl = last_setting.get_log_l()
+		else:
+			max_logl = last_setting.get_log_l_mr(k)
+		
 		max_setting = last_setting
 		
 		for node in sorted_node_list:
@@ -253,7 +340,12 @@ class exponential_mixture:
 						if chosen_branching_node in last_setting.spe_nodes:
 							break
 				new_setting = species_setting(spe_nodes = curr_sp_nodes, root = self.tree, sp_rate = self.fix_spe, fix_sp_rate = self.fix_spe_rate)
-				new_logl = new_setting.get_log_l()
+				new_logl = None 
+				if k < 2:
+					new_logl = new_setting.get_log_l()
+				else:
+					new_logl = new_setting.get_log_l_mr(k)
+				
 				if new_logl> max_logl:
 					max_logl = new_logl
 					max_setting = new_setting 
@@ -268,7 +360,7 @@ class exponential_mixture:
 			self.max_setting = max_setting
 
 
-	def H2(self, reroot = True):
+	def H2(self, reroot = True, k = 1):
 		"""Greedy"""
 		if reroot:
 			self.re_rooting()
@@ -322,7 +414,7 @@ class exponential_mixture:
 			self.max_setting = max_setting
 
 
-	def H3(self, reroot = True):
+	def H3(self, reroot = True, k = 1):
 		if reroot:
 			self.re_rooting()
 		sorted_node_list = self.tree.get_descendants()
@@ -419,7 +511,7 @@ class exponential_mixture:
 			self.max_setting = max_setting
 
 
-	def Brutal(self, reroot = False):
+	def Brutal(self, reroot = False, k = 1):
 		if reroot:
 			self.re_rooting()
 		first_node_list = []
@@ -436,25 +528,25 @@ class exponential_mixture:
 			self.next(first_setting)
 
 
-	def search(self, strategy = "H1", reroot = False):
+	def search(self, strategy = "H1", reroot = False, num_clusters = 1):
 		if strategy == "H1":
-			self.H1(reroot)
+			self.H1(reroot, num_clusters)
 		elif strategy == "H2":
-			self.H2(reroot)
+			self.H2(reroot, num_clusters)
 		elif strategy == "H3":
-			self.H3(reroot)
+			self.H3(reroot, num_clusters)
 		elif strategy == "Brutal":
-			self.Brutal(reroot)
+			self.Brutal(reroot, num_clusters)
 		else:# strategy == "H0":
-			self.H0(reroot)
+			self.H0(reroot, num_clusters)
 
 
 	def count_species(self, print_log = True):
 		lhr = lh_ratio_test(self.null_logl, self.max_logl, 1)
 		pvalue = lhr.get_p_value()
 		if print_log:
-			print("Speciation rate:" + repr(self.max_setting.rate2))
-			print("Coalesecnt rate:" + repr(self.max_setting.rate1))
+			#print("Speciation rate:" + repr(self.max_setting.rate2))
+			#print("Coalesecnt rate:" + repr(self.max_setting.rate1))
 			print("Null logl:" + repr(self.null_logl))
 			print("MAX logl:" + repr(self.max_logl))
 			print("P-value:" + repr(pvalue))
@@ -533,7 +625,7 @@ class exponential_mixture:
 if __name__ == "__main__":
 	
 	if len(sys.argv) < 3: 
-		print("usage: ./EXP.py -t <tree_of_life.tre> -m <H1/H2/H3/Brutal>  -r(reroot)  -s(show)  -c <scale> -maxiters <max num of brutal search(20000)> -minbr <minimal branch length accepted> -sprate <fix speciation rate>")
+		print("usage: ./EXP.py -t <tree_of_life.tre> -m <H1/H2/H3/Brutal>  -k <num rates clusters> -r(reroot)  -s(show)  -c <scale> -maxiters <max num of brutal search(20000)> -minbr <minimal branch length accepted> -sprate <fix speciation rate>")
 		sys.exit()
 	
 	stree = ""
@@ -543,8 +635,9 @@ if __name__ == "__main__":
 	sshow = False
 	sscale = 500
 	max_iter = 20000
-	min_brl = 0.0001
+	min_brl = 0.0000001
 	spe_rate = -1.0
+	num_c = 1
 	
 	for i in range(len(sys.argv)):
 		if sys.argv[i] == "-t":
@@ -571,6 +664,9 @@ if __name__ == "__main__":
 		elif sys.argv[i] == "-sprate":
 			i = i + 1
 			spe_rate = float(sys.argv[i])
+		elif sys.argv[i] == "-k":
+			i = i + 1
+			num_c = int(sys.argv[i])
 		
 	
 	if stree == "":
@@ -583,7 +679,7 @@ if __name__ == "__main__":
 	else:
 		me = exponential_mixture(tree= stree, max_iters = max_iter, min_br = min_brl, sp_rate = spe_rate, fix_sp_rate = True)
 	
-	me.search(reroot = sreroot, strategy = sstrategy)
+	me.search(reroot = sreroot, strategy = sstrategy, num_clusters = num_c)
 	
 	if sprint:
 		me.print_species()
