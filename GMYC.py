@@ -587,7 +587,7 @@ def optimize_null_model(umtree):
 	cnt = 0
 	while change > min_change and cnt < max_iters:
 		cnt = cnt + 1
-		para, nn, cc = fmin_l_bfgs_b(tar_fun_null, [1], args = [nm], disp = False, bounds = [[0, 100]], approx_grad = True)
+		para, nn, cc = fmin_l_bfgs_b(tar_fun_null, [1], args = [nm], disp = False, bounds = [[0, 10]], approx_grad = True)
 		curr_logl = nm.logl(p = para[0])
 		change = abs(curr_logl - last_llh)
 		last_llh = curr_logl
@@ -659,7 +659,7 @@ def gmyc(tree, print_detail = False, show_tree = False, show_llh = False, show_l
 	if show_tree:
 		utree.tree.show()
 	
-	if lrt.get_p_value() >= 0.5:
+	if lrt.get_p_value() >= 0.01:
 		return len(one_spe)
 	else:
 		return len(spes)
@@ -695,6 +695,7 @@ if __name__ == "__main__":
 		print("usage: ./EXP.py -t <tree_of_life.tre> -pd(print detail)  -st(show tree)  -sl(show llh plot)  -sn(show lineage number plot)  -ps(print species)")
 		sys.exit()
 	
-	gmyc(tree = stree, print_detail = sprint_detail, show_tree = sshow_tree, show_llh = sshow_llh, show_lineages = sshow_lineages, print_species = sprint_species)
+	numsp = gmyc(tree = stree, print_detail = sprint_detail, show_tree = sshow_tree, show_llh = sshow_llh, show_lineages = sshow_lineages, print_species = sprint_species)
+	print("Final number of estimated species by GMYC: " +  repr(numsp) )
 
 

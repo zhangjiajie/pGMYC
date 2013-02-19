@@ -3,17 +3,17 @@ import json
 import os 
 import glob
 import EXP
+import GMYC
 import sys
+import subprocess
+import re
 from ete2 import Tree
 from ete2 import SeqGroup
 from subprocess import call
-import subprocess
-import re
 from collections import deque
 
-
+#unused
 def token(tree):
-	#print(tree)
 	tree = tree[:-1]
 	tks = []
 	tree_len = len(tree)
@@ -41,6 +41,7 @@ def token(tree):
 	return tks
 
 
+#unused
 def grab_sub_tree(tree, leafs):
 	tks = token(tree)
 	#stak = deque()
@@ -100,6 +101,16 @@ def gen_alignment(seq_names = [], alignment = SeqGroup(), outputfile = "epa_pars
 	return outputfile
 
 
+def rm_redudent_seqs(aln_file_name):
+	call(["raxmlHPC-SSE3","-m","GTRGAMMA","-s",aln_file_name,"-f","c","-n","ck"])
+	os.remove("RAxML_info." + "ck")
+	if os.path.exists(aln_file_name+".reduced"):
+		print("redundet seqs removed")
+		return aln_file_name+".reduced"
+	else:
+		return aln_file_name
+
+
 #step0: pre-process simulated alignment:
 def pre_pro_aln(nfin, nfout):
 	fin=open(nfin,"r")
@@ -112,7 +123,9 @@ def pre_pro_aln(nfin, nfout):
 	fout.close()
 	os.remove(nfin)
 	os.rename(nfout, nfin)
-	return nfin
+	
+	faln = rm_redudent_seqs(nfin)
+	return faln
 
 
 #step1: extract ref alignment
@@ -374,7 +387,7 @@ def r8s(sfin_tree, sfout):
 	fout.write("mrca root " + leaf_names[0] + " " + leaf_names[1] + ";\n")
 	fout.write("fixage taxon=root age=100;\n")
 	fout.write("divtime method=pl algorithm=tn;\n")
-	fout.write("set smoothing=0.001 penalty=log checkGradient=yes;\n")
+	fout.write("set smoothing=0.5 penalty=log checkGradient=yes;\n")
 	fout.write("describe plot=chrono_description;\n")
 	fout.write("end;\n")
 	fout.close()
@@ -387,11 +400,29 @@ def r8s(sfin_tree, sfout):
 	fout = open(sfout, "w")
 	fout.write(trees + "\n")
 	fout.close()
+	os.remove(r8s_data_file)
+	os.remove("r8slog")
 	return sfout
 
 
 def gmyc_model(nfin_tree_list, nfin_ref_tree = None, re_root = False):
-	
+	spe_num_list = []
+	true_spe_num_list = []
+	for ntre in nfin_tree_list:
+		umtree = r8s(sfin_tree = ntre, sfout = "gmyc_temp" + ntre)
+		num_spe = GMYC.gmyc(tree = umtree)
+		spe_num_list.append(num_spe)
+		
+		t =Tree(ntre, format = 1)
+		leaves = t.get_leaves()
+		true_spe = set([leaves[0].name.split(".")[0]])
+		for leaf in leaves:
+			true_spe.add(leaf.name.split(".")[0])
+		true_spe_num = len(true_spe)
+		true_spe_num_list.append(true_spe_num)
+		#os.remove(umtree)
+		
+	return spe_num_list, true_spe_num_list
 
 
 #step6: batch test normal me
@@ -498,45 +529,94 @@ def batch_test_me_g(folder="./", suf = "phy", num_spe_tree = 10):
 
 def batch_test_gmyc(folder="./", suf = "phy", num_spe_tree = 10):
 	phyl = glob.glob(folder + "*." + suf)
+	num_correct = 0
 	for phy in phyl:
 		fin1 = pre_pro_aln(nfin=phy, nfout="temp1")
 		fin2 = extract_ref_alignment(nfin = fin1 , nfout = "temp2.phy", num_prune = 2)
 		fin3 = build_ref_tree(nfin = fin2, nfout = "temp3")
 		fin4 = run_EPA(nfin_aln =fin1 , nfin_tree=fin3 , nfout="p3")
 		num_e, alns, tres = extract_placement2(nfin_place = fin4, nfin_aln = fin1, nfout = "p4")
+		sp_num_l, true_sp_num_l = gmyc_model(tres)
+		for aln in alns:
+			os.remove(aln)
+		for tre in tres:
+			os.remove(tre)
+		jk1 = glob.glob("*.reduced")
+		for jkfile in jk1:
+			os.remove(jkfile)
+		for i in range(len(sp_num_l)):
+			if sp_num_l[i] == true_sp_num_l[i]:
+				num_correct = num_correct + 1
+				print("True: " + repr(true_sp_num_l[i]) + "  -- Predic: " + repr(sp_num_l[i]) )
+			else:
+				print("True: " + repr(true_sp_num_l[i]) + "  -- Predic: " + repr(sp_num_l[i]) )
+		
+		os.remove("temp2.phy")
+		os.remove("temp3.tre")
+		os.remove("p3.jplace")
+		print("Correct EXP estimate: " + repr(num_correct))
+
+
+#This will do batch test of mix exp model on original trees with 10 species
+def batch_mix_exp(folder="./", suf = "phy", num_spe_tree = 10):
+	phyl = glob.glob(folder + "*." + suf)
+	num_correct = 0
+	for phy in phyl:
+		fin1 = pre_pro_aln(nfin=phy, nfout="temp1")
+		fin2 = build_ref_tree(nfin = fin1, nfout = "temp2")
+		me = EXP.exponential_mixture(fin2)
+		me.search(reroot = True, strategy = "H0")
+		num_spe = me.count_species(print_log = False)
+		print("#species of " + phy + ": " + repr(num_spe))
+		os.remove(fin2)
+
+
+def batch_gmyc_umtree(folder="./", suf = "phy", num_spe_tree = 10):
+	phyl = glob.glob(folder + "*." + suf)
+	num_correct = 0
+	for phy in phyl:
+		num_spe = GMYC.gmyc(tree = phy)
+		print("#species of " + phy + ": " + repr(num_spe))
+
+
 
 if __name__ == "__main__":
 	
-	#r8s(sfin_tree = "test.tree.tre", sfout = "r8sout")
-	batch_test_me_g(folder="./", suf = "phy", num_spe_tree = 10)
-	#pre_pro_aln(nfin="pv.phy", nfout="jz.phy")
-	#sys.exit()
+	if len(sys.argv) < 8: 
+		print("usage: ./EXP_pipe.py -folder <folder contain test files> -suf <suffix of the test files> -num_spe <num of species per test file> -m <epa_me/epa_me_g/epa_gmyc/me/gmyc> -o <output file>")
+		sys.exit()
 	
-	#extract_placement2(nfin_place = "p3.jplace", nfin_aln = "pipe_test.phy" , nfout = "mf")
-	#tree = "(((6.9.q:0.00100237079650974015,6.7.q:0.00100465474105772279):0.00201101367340204883,((6.3.q:0.00000084782314493460,((6.2.q:0.00100412821359892714,6.8.q:0.00100178845816099155):0.00200929918166048134,((6.10.r:0.00000084782314493460,((8.10.r:0.63519639594496091206,7.10.r:0.63133318437781671406):0.35164641786541400714,(((2.10.r:1.60433520129746498561,3.10.r:1.49032545048350262284):0.27033482133716180140,1.10.r:1.58388778575899435985):0.00000084782314493460,5.10.r:3.96273032179643891482):0.59925906591284461289):0.81668233991507044323):0.00201359338363953262,6.5.q:0.00100145579190110789):0.01117194743492899885):0.00000084782314493460):0.00200738201693853417,6.4.q:0.00100242270723678562):0.00000084782314493460):0.00302073377019030330,6.6.q:0.00100116047038890888,6.1.q:0.00100552618967688712):0.0;"
-	#leafs = ["6.7.q", "6.9.q", "6.3.q", "6.2.q", "6.8.q"]
-	#grab_sub_tree(tree, leafs)
-	"""
-	fin1 = "jz.phy"
-	fin2 = extract_ref_alignment(nfin = fin1 , nfout = "p1.phy")
-	fin3 = build_ref_tree(nfin = fin2, nfout = "p2")
-	#print(trees)
-	fin4 = run_EPA(nfin_aln =fin1 , nfin_tree=fin3 , nfout="p3")
-	num_e, alns, tres = extract_placement(nfin_place = fin4, nfin_aln = fin1, nfout = "p4")
-	sp_num_l = mix_exp_model(tres, nfin_ref_tree = fin3)
-	#sp_num_l = mix_exp_model(tres)
-	print("Number clusters id by EPA:" + repr(num_e))
-	cnt = 0
-	for spn in sp_num_l:
-		print("EPA cluster " + repr(cnt) + ", num spe = " + repr(spn))
-		cnt = cnt + 1
+	sfolder = "./"
+	ssuf = "phy"
+	snum_spe = 10
+	method = "me"
+	sfout = "log.txt"
 	
-	for aln in alns:
-		os.remove(aln)
-	for tre in tres:
-		os.remove(tre)
-	jk1 = glob.glob("*.reduced")
-	for jkfile in jk1:
-		os.remove(jkfile)
-	"""
+	for i in range(len(sys.argv)):
+		if sys.argv[i] == "-folder":
+			i = i + 1
+			sfolder = sys.argv[i]
+		elif sys.argv[i] == "-suf":
+			i = i + 1
+			ssuf = sys.argv[i]
+		elif sys.argv[i] == "-num_spe":
+			i = i + 1
+			snum_spe = int(sys.argv[i])
+		elif sys.argv[i] == "-m":
+			i = i + 1
+			method = sys.argv[i]
+		elif sys.argv[i] == "-o":
+			i = i + 1
+			sfout = sys.argv[i]
 	
+	if method == "me":
+		batch_mix_exp(folder = sfolder, suf = ssuf, num_spe_tree = snum_spe)
+	elif method == "epa_me":
+		batch_test_me(folder = sfolder, suf = ssuf, num_spe_tree = snum_spe)
+	elif method == "epa_me_g":
+		batch_test_me_g(folder = sfolder, suf = ssuf, num_spe_tree = snum_spe)
+	elif method == "epa_gmyc":
+		batch_test_gmyc(folder = sfolder, suf = ssuf, num_spe_tree = snum_spe)
+	elif method == "gmyc":
+		batch_gmyc_umtree(folder = sfolder, suf = ssuf, num_spe_tree = snum_spe)
+

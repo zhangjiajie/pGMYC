@@ -2,10 +2,12 @@
 import sys
 import math
 import collections
+import Clustering
 from ete2 import Tree, TreeStyle, TextFace, SeqGroup, NodeStyle
 from scipy.optimize import fmin
 from collections import deque
 from scipy import stats
+from numpy import array
 
 #TODO: root at each node; branching and bound using broad first search; multiple rates and clustering 
 
@@ -122,13 +124,73 @@ class species_setting:
 					one_spe.extend(node.get_leaf_names())
 				self.spe_list.append(one_spe)
 			return len(self.spe_list), self.spe_list
+			
+	
+	def seprate_rates(self):
+		self.rates = []
+		for node in self.active_nodes:
+			one_spe = []
+			if node.is_leaf():
+				pass
+			else:
+				brl = []
+				for nd in node.get_descendants()
+					brl.append(nd.dist)
+				e = exp_distribution(brl)
+				self.rates.append(e.rate)
+		return self.rates
+	
+	def multi_rates(self, k):
+		coa_logl = 0.0
+		features = array(self.rates)
+		km = Clustering.cluster(features, k)
+		labels = km.find_cluster()
+		c_brl_map = {}
+		c_e_map = {}
+		for lb in labels:
+			c_brl_map[lb] = []
+			c_e_map[lb] = None
+		for i in range(len(labels)):
+			anode = self.active_nodes[i]
+			lb = labels[i]
+			brls = c_brl_map[lb]
+			if anode.is_leadf():
+				pass
+			else:
+				for nd in anode.get_descendants():
+					brls.append(nd.dist)
+				c_brl_map[lb] = brls
+		
+		for key in c_brl_map.keys():
+			e = exp_distribution(c_brl_map[key])
+			coa_logl = coa_logl + e.sum_log_l()
+			
+		return coa_logl
+	
+	def get_log_l_mr(self, k):
+		self.seprate_rates()
+		coa_llh = self.multi_rates(k)
+		spe_br = []
+		for node in self.spe_nodes:
+			if node.dist > self.min_brl:
+				spe_br.append(node.dist)
+		e2 = None
+		if self.fix_spe_rate:
+			e2 = exp_distribution(spe_br, rate = self.spe_rate)
+		else:
+			e2 = exp_distribution(spe_br)
+		
+		
+		self.logl = coa_llh + e2.sum_log_l()
+		
+		return self.logl
 
 
 
 class exponential_mixture:
 	"""init(), search() and count_species()"""
-	def __init__(self, tree, sp_rate = 0, fix_sp_rate = False, max_iters = 20000):
-		self.min_brl = 0.0001
+	def __init__(self, tree, sp_rate = 0, fix_sp_rate = False, max_iters = 20000, min_br = 0.0000001):
+		self.min_brl = min_br
 		self.tree = Tree(tree, format = 1)
 		self.tree.dist = 0.0
 		self.fix_spe_rate = fix_sp_rate
@@ -531,7 +593,7 @@ class exponential_mixture:
 if __name__ == "__main__":
 	
 	if len(sys.argv) < 3: 
-		print("usage: ./EXP.py -t <tree_of_life.tre> -m <H0/H1/H2/H3/Brutal>  -r(reroot)  -s(show)  -c <scale> -p <print species>")
+		print("usage: ./EXP.py -t <tree_of_life.tre> -m <H1/H2/H3/Brutal>  -r(reroot)  -s(show)  -c <scale> -maxiters <max num of brutal search(20000)> -minbr <minimal branch length accepted> -sprate <fix speciation rate>")
 		sys.exit()
 	
 	stree = ""
@@ -540,6 +602,9 @@ if __name__ == "__main__":
 	sprint = False 
 	sshow = False
 	sscale = 500
+	max_iter = 20000
+	min_brl = 0.0000001
+	spe_rate = -1.0
 	
 	for i in range(len(sys.argv)):
 		if sys.argv[i] == "-t":
@@ -557,13 +622,29 @@ if __name__ == "__main__":
 			sscale = int(sys.argv[i])
 		elif sys.argv[i] == "-p":
 			sprint = True 
+		elif sys.argv[i] == "-maxiters":
+			i = i + 1
+			max_iter = int(sys.argv[i])
+		elif sys.argv[i] == "-minbr":
+			i = i + 1
+			min_brl = float(sys.argv[i])
+		elif sys.argv[i] == "-sprate":
+			i = i + 1
+			spe_rate = float(sys.argv[i])
+		
 	
 	if stree == "":
-		print("usage: ./EXP.py -t <tree_of_life.tre> -m <H1/H2/H3/Brutal>  -r(reroot)  -s(show)  -c <scale>")
+		print("usage: ./EXP.py -t <tree_of_life.tre> -m <H1/H2/H3/Brutal>  -r(reroot)  -s(show)  -c <scale> -maxiters <max num of brutal search(20000)> -minbr <minimal branch length accepted> -sprate <fix speciation rate>")
 		sys.exit()
 	
-	me = exponential_mixture(stree)
+	me = None 
+	if spe_rate <= 0:
+		me = exponential_mixture(tree= stree, max_iters = max_iter, min_br = min_brl )
+	else:
+		me = exponential_mixture(tree= stree, max_iters = max_iter, min_br = min_brl, sp_rate = spe_rate, fix_sp_rate = True)
+	
 	me.search(reroot = sreroot, strategy = sstrategy)
+	
 	if sprint:
 		me.print_species()
 	print("Number of species:" + repr(me.count_species()))

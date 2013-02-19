@@ -1,0 +1,19 @@
+#nexus
+
+[** Sample data file illustrating construction of the Matrix Representation for two input trees. This matrix 
+can then be input to PAUP* for maximum parsimony search **]
+
+begin trees;
+
+tree 'Fig._2' = ((Archaeopteris,(Lyginopteris,(Medullosans,Cycads,((((Cordaixylon,Mesoxylon),(Lebachia,Extant_Conifers)),Ginkgo),Callistophyton,Peltasperms,(Glossopterids,(Caytonia,(Corystosperms,((Bennettitales,Pentoxylon),(((Gnetum,Welwitschia),Ephedra)Gnetales,Angiosperms))Anthophytes))))))Seed_Plants));
+tree 'Fig._4' = (Aneurophyton,(Archaeopteris,('Early_Carb._lygonopterids',(Higher_lygonopterids,(Medullosa,(((Ginkgoales,Coniferales),Euramerican_cordaites),(Callistophyton,(Corystospermaceae,((Cycadales,Peltaspermum),(Glossopteridales,(Caytonia,(Angiosperms,(Bennettitales,(Pentoxylon,(Ephedra,(Welwitschia,Gnetum))Gnetales)))Anthophytes)))))))))Seed_Plants));
+
+tree bob = (a,b,c);
+
+end;
+
+
+
+begin rates;
+mrp method=baum weights=no;
+end;
