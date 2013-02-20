@@ -55,6 +55,12 @@ class exp_distribution:
 		for br in self.data:
 			s = s + self.log_l(br)
 		return s 
+		
+	def write_file(self):
+		fout  = open(repr(self.rate), "w")
+		for br in self.data:
+			fout.write(repr(br) + "\n")
+		fout.close()
 
 
 
@@ -100,15 +106,15 @@ class species_setting:
 			if node.dist > self.min_brl:
 				coa_br.append(node.dist)
 				
-		e1 = exp_distribution(coa_br)
-		e2 = None
+		self.e1 = exp_distribution(coa_br)
+		self.e2 = None
 		if self.fix_spe_rate:
-			e2 = exp_distribution(spe_br, rate = self.spe_rate)
+			self.e2 = exp_distribution(spe_br, rate = self.spe_rate)
 		else:
-			e2 = exp_distribution(spe_br)
-		self.rate1 = e1.rate
-		self.rate2 = e2.rate
-		logl = e1.sum_log_l() + e2.sum_log_l()
+			self.e2 = exp_distribution(spe_br)
+		self.rate1 = self.e1.rate
+		self.rate2 = self.e2.rate
+		logl = self.e1.sum_log_l() + self.e2.sum_log_l()
 		self.logl = logl
 		return logl
 		
@@ -124,6 +130,23 @@ class species_setting:
 					one_spe.extend(node.get_leaf_names())
 				self.spe_list.append(one_spe)
 			return len(self.spe_list), self.spe_list
+			
+	def whiten_species(self):
+		if len(self.spe_list) != 0:
+			avg_num = 0.0
+			for sp in self.spe_list:
+				avg_num = avg_num + len(sp)
+			avg_num = avg_num / float(len(self.spe_list))
+			avg_num = int(math.ceil(avg_num))
+			print(avg_num)
+			new_spe_list = []
+			for sp in self.spe_list:
+				if len(sp) > avg_num:
+					newsp = sp[:avg_num] 
+					new_spe_list.extend(newsp)
+				else:
+					new_spe_list.extend(sp)
+			return new_spe_list
 
 
 
@@ -458,6 +481,8 @@ class exponential_mixture:
 			print("Null logl:" + repr(self.null_logl))
 			print("MAX logl:" + repr(self.max_logl))
 			print("P-value:" + repr(pvalue))
+			self.max_setting.e1.write_file()
+			self.max_setting.e2.write_file()
 		if pvalue < 0.001:
 			num_sp, self.species_list = self.max_setting.count_species()
 			return num_sp
@@ -465,6 +490,21 @@ class exponential_mixture:
 			self.species_list = []
 			self.species_list.append(self.tree.get_leaf_names()) 
 			return 1
+
+
+	def whitening_search(self, strategy = "H1", reroot = False):
+		self.search(strategy, reroot)
+		num_sp, self.species_list = self.max_setting.count_species()
+		spekeep = self.max_setting.whiten_species()
+		self.tree.prune(spekeep)
+		self.max_logl = float("-inf") 
+		self.max_setting = None
+		self.null_logl = 0.0
+		self.null_model()
+		self.species_list = None
+		self.counter = 0
+		self.setting_set = set([])
+		self.search(strategy, reroot)
 
 
 	def print_species(self):
@@ -533,7 +573,7 @@ class exponential_mixture:
 if __name__ == "__main__":
 	
 	if len(sys.argv) < 3: 
-		print("usage: ./EXP.py -t <tree_of_life.tre> -m <H1/H2/H3/Brutal>  -r(reroot)  -s(show)  -c <scale> -maxiters <max num of brutal search(20000)> -minbr <minimal branch length accepted> -sprate <fix speciation rate>")
+		print("usage: ./EXP.py -t <tree_of_life.tre> -m <H0/H1/H2/H3/Brutal> -w(whitening) -r(reroot)  -s(show)  -c <scale> -maxiters <max num of brutal search(20000)> -minbr <minimal branch length accepted> -sprate <fix speciation rate>")
 		sys.exit()
 	
 	stree = ""
@@ -545,6 +585,7 @@ if __name__ == "__main__":
 	max_iter = 20000
 	min_brl = 0.0001
 	spe_rate = -1.0
+	whiten = False
 	
 	for i in range(len(sys.argv)):
 		if sys.argv[i] == "-t":
@@ -571,10 +612,12 @@ if __name__ == "__main__":
 		elif sys.argv[i] == "-sprate":
 			i = i + 1
 			spe_rate = float(sys.argv[i])
+		elif sys.argv[i] == "-w":
+			whiten = True
 		
 	
 	if stree == "":
-		print("usage: ./EXP.py -t <tree_of_life.tre> -m <H1/H2/H3/Brutal>  -r(reroot)  -s(show)  -c <scale> -maxiters <max num of brutal search(20000)> -minbr <minimal branch length accepted> -sprate <fix speciation rate>")
+		print("usage: ./EXP.py -t <tree_of_life.tre> -m <H0/H1/H2/H3/Brutal>  -w(whitening) -r(reroot)  -s(show)  -c <scale> -maxiters <max num of brutal search(20000)> -minbr <minimal branch length accepted> -sprate <fix speciation rate>")
 		sys.exit()
 	
 	me = None 
@@ -583,7 +626,10 @@ if __name__ == "__main__":
 	else:
 		me = exponential_mixture(tree= stree, max_iters = max_iter, min_br = min_brl, sp_rate = spe_rate, fix_sp_rate = True)
 	
-	me.search(reroot = sreroot, strategy = sstrategy)
+	if whiten:
+		me.whitening_search(reroot = sreroot, strategy = sstrategy)
+	else:
+		me.search(reroot = sreroot, strategy = sstrategy)
 	
 	if sprint:
 		me.print_species()
