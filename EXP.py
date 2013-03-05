@@ -2,14 +2,13 @@
 import sys
 import math
 import collections
-import Clustering
 from ete2 import Tree, TreeStyle, TextFace, SeqGroup, NodeStyle
 from scipy.optimize import fmin
 from collections import deque
 from scipy import stats
 from numpy import array
 
-#TODO: root at each node; branching and bound using broad first search; multiple rates and clustering 
+#TODO: root at each node; branching and bound using broad first search; 
 
 class lh_ratio_test:
 	def __init__(self, null_llh, llh, df):
@@ -18,7 +17,6 @@ class lh_ratio_test:
 	
 	def get_p_value(self):
 		return self.p
-
 
 
 class exp_distribution:
