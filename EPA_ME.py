@@ -273,6 +273,8 @@ def extract_placement3(nfin_place, nfin_aln, nfout, min_lw = 0.9, logfile = "spc
 		
 		"""find sister node"""
 		snode = place_node.get_sisters()[0]
+		if not snode.is_leaf():
+			snode = snode.get_closest_leaf()[0]
 		sister_name = snode.name
 		
 		"""generate aligment"""
@@ -736,8 +738,8 @@ if __name__ == "__main__":
 	#raxml_g(nfolder = "/home/zhangje/biosoup/production/EPA/", nfout = "/home/zhangje/biosoup/production/EPA/ttt", nref_align = "/home/zhangje/biosoup/production/EPA/ref_outs_547.fas", suf = "mttree")
 	#print estimate_ref_exp_rate("/home/zhangje/GIT/gGMYC/biosoup/production/Test/ref_out547.tre")
 	#otu_picking(nfolder = "/home/zhangje/biosoup/production/EPA3/OTU/", nfout1 = "/home/zhangje/biosoup/production/EPA3/OTU/bds_leaf_picked_otus.fasta", nfout2 = "/home/zhangje/biosoup/production/EPA3/OTU/bds_inode_picked_otus.fasta", nref_tree = "/home/zhangje/biosoup/production/chimera/ref_out547.tre", n_align = "/home/zhangje/biosoup/production/chimera/454.epainput.chimerafree.fasta", suf = "subtree")
-	stas(sfin = "/home/zhangje/GIT/gGMYC/bds_leaf_picked_otus.fasta")
-	#extract_placement3(nfin_place = "/home/zhangje/GIT/gGMYC/biosoup/production/EPA3/454.cfree.jpalce", nfin_aln = "/home/zhangje/GIT/gGMYC/biosoup/production/EPA3/454.epainput.chimerafree.fasta", nfout = "/home/zhangje/GIT/gGMYC/biosoup/production/EPA3/bds")
+	#stas(sfin = "/home/zhangje/GIT/gGMYC/bds_leaf_picked_otus.fasta")
+	extract_placement3(nfin_place = "/home/zhangje/GIT/biosoup/production/EPA4/454.cfree.jpalce", nfin_aln = "/home/zhangje/GIT/biosoup/production/EPA4/454.epainput.chimerafree.fasta", nfout = "/home/zhangje/GIT/biosoup/production/EPA4/bds", logfile = "/home/zhangje/GIT/biosoup/production/EPA4/spcount.log")
 	#raxml(nfolder = "/home/zhangje/biosoup/production/EPA3/", nfout = "/home/zhangje/biosoup/production/EPA3/ttt", suf = "fasta")
 	#count_reads("/home/zhangje/GIT/gGMYC/biosoup/production/EPA3/")
 	#random_remove_taxa(falign = "/home/zhangje/GIT/gGMYC/biosoup/production/reduce_reftree/origin_ref.fasta", num_remove = 270, num_repeat = 10)
