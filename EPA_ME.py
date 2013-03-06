@@ -32,6 +32,8 @@ def gen_alignment2(seq_names = [], alignment = SeqGroup()):
 	for taxa in seq_names:
 		if taxa.startswith("*R*"):
 			seq = alignment.get_seq(taxa[3:])
+		elif taxa == "sister":
+			continue
 		else:
 			seq = alignment.get_seq(taxa)
 		newalign.set_seq(taxa, seq)
@@ -58,24 +60,27 @@ def count_and_pick_reads(align, outputfile):
 	entries = align.get_entries()
 	if len(entries) == 1:
 		name = entries[0][0]
-		if name.startswith("*R*"):
+		if name.startswith("*R*") or name == "sister":
 			return ""
 	for entr in align.get_entries():
 		name = entr[0]
 		seq = entr[1]
-		if not name.startswith("*R*"):
+		
+		if name.startswith("*R*"):
+			logss = "R	find reference species: " + name + "\n"
+		elif name == "sister":
+			pass
+		else:
 			numseqs = int(name.split("*")[-1])
 			numreads = numreads + numseqs
-		else:
-			logss = "	find reference species: " + name
-		
-		seql = count_non_gap(seq)
-		if seql > max_non_gap:
-			l_reads = entr
-			max_non_gap = seql
+		if name != "sister":
+			seql = count_non_gap(seq)
+			if seql > max_non_gap:
+				l_reads = entr
+				max_non_gap = seql
 	if logss == "":
-		logss = "	find new species:"
-	logss = logss + " :reads number: " + repr(numreads) + "\n"
+		logss = "D	find new species \n"
+	logss = logss + "K	reads number: " + repr(numreads) + "\n"
 	fout = open(outputfile, "a")
 	fout.write(">" + l_reads[0] + "*" + repr(numreads) + "\n")
 	fout.write(l_reads[1] + "\n")
@@ -318,7 +323,7 @@ def extract_placement3(nfin_place, nfin_aln, nfout, min_lw = 0.9, logfile = "spc
 				newalign.set_seq(taxa, seq)
 			if len(newalign.get_entries()) < 2:
 				count_and_pick_reads(align = newalign, outputfile = nfout + "_inode_picked_otus.fasta")
-				sp_log(sfout = logfile, logs="	the palcement is on an internal node \n	find new species::reads number:1 \n")
+				sp_log(sfout = logfile, logs="I	the palcement is on an internal node \nD	find new species\nK	reads number: 1 \n")
 			else:
 				#og_seq = align_orgin.get_seq(outgroup_name)
 				#newalign.set_seq("root_ref", og_seq)
@@ -525,18 +530,13 @@ def find_lonest_br(tree):
 	return rootnode
 
 
-#build the phylogenetic tree
+"""build the phylogenetic tree for ME, extract the subtree - rooting and remove root_ref"""
 def raxml(nfolder, nfout, suf = "fasta"):
-	#align_orgin = SeqGroup(sequences = nref_align)
-	#ref_taxa = []
-	#for entr in align_orgin.get_entries():
-	#	ref_taxa.append(entr[0])
-	
 	naligns = glob.glob(nfolder + "*." + suf)
 	cnt = 0
 	for aln in naligns:
 		cnt = cnt + 1
-		trename = build_ref_tree(aln, "full"+repr(cnt))
+		trename = build_ref_tree_l(aln, "full"+repr(cnt))
 		full_tree = Tree(trename, format=1)
 		rootref = full_tree.get_leaves_by_name("root_ref")[0]
 		if rootref.up.is_root():
@@ -578,33 +578,34 @@ def sp_log(sfout, logs=""):
 
 
 def otu_picking(nfolder, nfout1, nfout2, nref_tree, n_align, suf = "subtree"):
+	"""T, tree file; M, search method; N, num cpecies; L, place on leaf; I, place on internal node; R, find reference species; D, find denovo specise; K, read number"""
 	trees = glob.glob(nfolder + "*." + suf)
 	spe_rate = estimate_ref_exp_rate(nref_tree)
 	align = SeqGroup(sequences = n_align)
-	logss = ""
 	for tree in trees:
-		logss = logss + "Searching species in tree: " + tree + ":\n"
+		logss = ""
+		logss = logss + "T	Searching species in tree: " + tree + ":\n"
 		epa_exp = EXP.exponential_mixture(tree, sp_rate = spe_rate, fix_sp_rate = True)
 		t = Tree(tree, format = 1)
 		tsize = len(t.get_leaves())
 		if tsize > 500:
 			epa_exp.search(reroot = False, strategy = "H1")
-			logss = logss + "H1\n"
+			logss = logss + "M	H1\n"
 		elif tsize < 20:
 			epa_exp.search(reroot = False, strategy = "Brutal")
-			logss = logss + "Brutal\n"
+			logss = logss + "M	Brutal\n"
 		else:
 			epa_exp.search(reroot = False, strategy = "H0")
-			logss = logss + "H0\n"
+			logss = logss + "M	H0\n"
 		num_spe = epa_exp.count_species(print_log = False)
 		
-		logss = logss + "	find number specices: " + repr(num_spe) + "\n"
+		logss = logss + "N	find number specices: " + repr(num_spe) + "\n"
 		
 		idx = tree.find("leaf")
 		if idx >= 0:
-			logss = logss + "	the palcement is on a leaf node" + "\n"
+			logss = logss + "L	the palcement is on a leaf node" + "\n"
 		else:
-			logss = logss + "	the palcement is on an internal node" + "\n"
+			logss = logss + "I	the palcement is on an internal node" + "\n"
 		for spe in epa_exp.species_list:
 			newalign = gen_alignment2(seq_names = spe, alignment = align)
 			
@@ -619,44 +620,70 @@ def otu_picking(nfolder, nfout1, nfout2, nref_tree, n_align, suf = "subtree"):
 
 
 def stas(sfin):
-	cnt_read2 = 0 
-	cnt_read3 = 0
-	cnt_read4 = 0
-	cnt_read5 = 0
-	ref_map = 0
-	ref_map2 = 0 
-	ref_map5 = 0
-	align = SeqGroup(sequences = sfin)
-	for entr in align.get_entries():
-		numreads = int(entr[0].split("*")[-1])
-		if entr[0].startswith("*R*"):
-			ref_map = ref_map + 1
-			
-		if entr[0].startswith("*R*"):
-			if numreads > 4:
-				ref_map5 = ref_map5 + 1
-				
-		if entr[0].startswith("*R*"):
-			if numreads > 1:
-				ref_map2 = ref_map2 + 1
-		
-		if numreads > 1:
-			cnt_read2 = cnt_read2 + 1
-		if numreads > 2:
-			cnt_read3 = cnt_read3 + 1
-		if numreads > 3:
-			cnt_read4 = cnt_read4 + 1
-		if numreads > 4:
-			cnt_read5 = cnt_read5 + 1
+	"""T, tree file; M, search method; N, num cpecies; L, place on leaf; I, place on internal node; R, find reference species; D, find denovo specise; K, read number"""
+	otu1 = 0
+	otu2 = 0 
+	otu3 = 0
+	otu4 = 0
+	otu5 = 0
+	match1 = 0
+	match2 = 0 
+	match5 = 0
+	nomatch1 = 0
+	nomatch2 = 0
+	nomatch5 =0
 	
-	print(">=5 reads OTUs: " + repr(cnt_read5))
-	print(">=4 reads OTUs: " + repr(cnt_read4))
-	print(">=3 reads OTUs: " + repr(cnt_read3))
-	print(">=2 reads OTUs: " + repr(cnt_read2))
-	print(">=1 reads OTUs: " + repr(len(align.get_entries())))
-	print("maped OTUs: " + repr(ref_map))
-	print("maped OTUs >=5: " + repr(ref_map5))
-	print("maped OTUs >=2: " + repr(ref_map2))
+	f = open(sfin)
+	l = f.readline()
+	while l!="":
+		if l.startswith("R"):
+			l = f.readline()
+			numreads = int(l.split(":")[-1])
+			if numreads > 0:
+				otu1 = otu1 + 1
+				match1 = match1 + 1
+			if numreads > 1:
+				otu2 = otu2 + 1
+				match2 = match2 + 1
+			if numreads > 2:
+				otu3 = otu3 + 1
+			if numreads > 3:
+				otu4 = otu4 + 1
+			if numreads > 4:
+				otu5 = otu5 + 1
+				match5 = match5 + 1
+		if l.startswith("D"):
+			l = f.readline()
+			numreads = int(l.split(":")[-1])
+			if numreads > 0:
+				otu1 = otu1 + 1
+				nomatch1 = nomatch1 + 1
+			if numreads > 1:
+				otu2 = otu2 + 1
+				nomatch2 = nomatch2 + 1
+			if numreads > 2:
+				otu3 = otu3 + 1
+			if numreads > 3:
+				otu4 = otu4 + 1
+			if numreads > 4:
+				otu5 = otu5 + 1
+				nomatch5 = nomatch5 + 1
+		l = f.readline()
+	f.close()
+	
+	
+	print(">=5 reads OTUs: " + repr(otu5))
+	print(">=5 match OTUs: " + repr(match5))
+	print(">=5 nomatch OTUs: " + repr(nomatch5))
+	print(">=4 reads OTUs: " + repr(otu4))
+	print(">=3 reads OTUs: " + repr(otu3))
+	print(">=2 reads OTUs: " + repr(otu2))
+	print(">=2 match OTUs: " + repr(match2))
+	print(">=2 nomatch OTUs: " + repr(nomatch2))
+	print(">=1 reads OTUs: " + repr(otu1))
+	print(">=1 match OTUs: " + repr(match1))
+	print(">=1 nomatch OTUs: " + repr(nomatch1))
+
 
 
 def random_remove_taxa(falign, num_remove, num_repeat = 10):
@@ -689,6 +716,20 @@ def print_cluster_script_EPA(nfolder): #EPA
 		treename = tree.split("/")[-1]
 		alnname = str(treename[15:]) + ".combin.fasta"
 		print("/home/zhangje/bin/raxmlHPC-PTHREADS-SSE3 -m GTRGAMMA -p 1234 -T 48 -f v -s " + appd + alnname + " -n " + str(treename[32:-6]) + " -r " + appd + treename)
+		
+def print_cluster_script_ME_tree(nfolder, apd): #EPA
+	naln = glob.glob(nfolder + "me*fasta")
+	#appd = "/hits/sco/zhangje/biosoup/reduced_epa/"
+	appd = apd
+	for aln in naln:
+		alnname = aln.split("/")[-1]
+		if alnname.startswith("me_leaf"):
+			print("/home/zhangje/bin/raxmlHPC-PTHREADS-SSE3 -m GTRGAMMA -p 1234 -T 48 -s " + appd + alnname + " -n " + alnname)
+		elif alnname.startswith("me_inode"):
+			#call(["/home/zhangje/bin/raxmlHPC-PTHREADS-SSE3","-m","GTRGAMMA","-s",nsfin, "-g", ntfin, "-n",nfout,"-p", "1234", "-T", "40"])#, stdout=open(os.devnull, "w"), stderr=subprocess.STDOUT)
+			mttreename = alnname.split(".")[-1] + ".mttree"
+			print("/home/zhangje/bin/raxmlHPC-PTHREADS-SSE3 -m GTRGAMMA -p 1234 -T 48 -s " + appd + alnname + " -n " + alnname + " -g " + appd + mttreename)
+
 
 
 def merge_align(nfolder, talign = "", pref = "origin_ref.fasta_"):
@@ -737,13 +778,58 @@ if __name__ == "__main__":
 	#extract_placement2(nfin_place = "/home/zhangje/GIT/gGMYC/biosoup/production/EPA/454.placement.jplace", nfin_aln = "/home/zhangje/GIT/gGMYC/biosoup/production/EPA/454.epainput.fasta", nfout = "/home/zhangje/GIT/gGMYC/biosoup/production/EPA/bds")
 	#raxml_g(nfolder = "/home/zhangje/biosoup/production/EPA/", nfout = "/home/zhangje/biosoup/production/EPA/ttt", nref_align = "/home/zhangje/biosoup/production/EPA/ref_outs_547.fas", suf = "mttree")
 	#print estimate_ref_exp_rate("/home/zhangje/GIT/gGMYC/biosoup/production/Test/ref_out547.tre")
-	#otu_picking(nfolder = "/home/zhangje/biosoup/production/EPA3/OTU/", nfout1 = "/home/zhangje/biosoup/production/EPA3/OTU/bds_leaf_picked_otus.fasta", nfout2 = "/home/zhangje/biosoup/production/EPA3/OTU/bds_inode_picked_otus.fasta", nref_tree = "/home/zhangje/biosoup/production/chimera/ref_out547.tre", n_align = "/home/zhangje/biosoup/production/chimera/454.epainput.chimerafree.fasta", suf = "subtree")
-	#stas(sfin = "/home/zhangje/GIT/gGMYC/bds_leaf_picked_otus.fasta")
-	extract_placement3(nfin_place = "/home/zhangje/GIT/biosoup/production/EPA4/454.cfree.jpalce", nfin_aln = "/home/zhangje/GIT/biosoup/production/EPA4/454.epainput.chimerafree.fasta", nfout = "/home/zhangje/GIT/biosoup/production/EPA4/bds", logfile = "/home/zhangje/GIT/biosoup/production/EPA4/spcount.log")
-	#raxml(nfolder = "/home/zhangje/biosoup/production/EPA3/", nfout = "/home/zhangje/biosoup/production/EPA3/ttt", suf = "fasta")
+	#otu_picking(nfolder = "/home/zhangje/GIT/gGMYC/Test/", nfout1 = "/home/zhangje/GIT/gGMYC/Test/bds_leaf_picked_otus.fasta", nfout2 = "/home/zhangje/GIT/gGMYC/Test/bds_inode_picked_otus.fasta", nref_tree = "/home/zhangje/GIT/biosoup/production/ref_out547.tre", n_align = "/home/zhangje/GIT/biosoup/production/454.epainput.chimerafree.fasta", suf = "subtree")
+	stas(sfin = "/home/zhangje/GIT/gGMYC/spcount.log")
+	
+	#extract_placement3(nfin_place = "/home/zhangje/GIT/biosoup/production/EPA4/454.cfree.jpalce", nfin_aln = "/home/zhangje/GIT/biosoup/production/EPA4/454.epainput.chimerafree.fasta", nfout = "/home/zhangje/GIT/biosoup/production/EPA4/bds", logfile = "/home/zhangje/GIT/biosoup/production/EPA4/spcount.log")
+	#extract_placement3(nfin_place = "/home/zhangje/GIT/biosoup/production/Reduced/RAxML_portableTree.81_1.jplace", nfin_aln = "/home/zhangje/GIT/biosoup/production/Reduced/origin_ref.fasta_81_1.fasta.combin.fasta", nfout = "/home/zhangje/GIT/biosoup/production/Reduced/bds", logfile = "/home/zhangje/GIT/biosoup/production/Reduced/spcount.log")
+
+	#raxml(nfolder = "/home/zhangje/GIT/biosoup/production/EPA4/small_trees/", nfout = "/home/zhangje/GIT/biosoup/production/EPA4/small_trees/ttt", suf = "fasta")
 	#count_reads("/home/zhangje/GIT/gGMYC/biosoup/production/EPA3/")
 	#random_remove_taxa(falign = "/home/zhangje/GIT/gGMYC/biosoup/production/reduce_reftree/origin_ref.fasta", num_remove = 270, num_repeat = 10)
 	#print_cluster_script(nfolder = "/home/zhangje/GIT/gGMYC/biosoup/production/reduce_reftree/")
 	#print_cluster_script_EPA(nfolder = "/home/zhangje/GIT/gGMYC/biosoup/production/reduce_reftree/")
 	#merge_align(nfolder = "/home/zhangje/GIT/gGMYC/biosoup/production/reduce_reftree/", talign = "/home/zhangje/GIT/gGMYC/biosoup/production/reduce_reftree/454.chimerafree2.fasta", pref = "origin_ref.fasta_")
+	if len(sys.argv) < 3:
+		print("usage: ./EPA_ME.py -step <extract_placements/build_tree_for_placement/otu_picking/summary> -task <run/script_only/subtree_extract> -appnd <>  -folder <./> -jplace <*.jplace> -aln <*.fasta> -reftree <*.tre>")
+		sys.exit() 
+		
+	sstep = ""
+	sfolder = "./"
+	stask = ""
+	saln = ""
+	sjplace = ""
+	sreftree = ""
+	sappend = ""
+	for i in range(len(sys.argv)):
+		if sys.argv[i] == "-step":
+			i = i + 1
+			sstep = sys.argv[i]
+		elif sys.argv[i] == "-task":
+			i = i + 1
+			stask = sys.argv[i]
+		elif sys.argv[i] == "-folder":
+			i = i + 1
+			sfolder = sys.argv[i]
+		elif sys.argv[i] == "-jplace":
+			i = i + 1
+			sjplace = sys.argv[i]
+		elif sys.argv[i] == "-aln":
+			i = i + 1
+			saln = sys.argv[i]
+		elif sys.argv[i] == "-reftree":
+			i = i + 1
+			sreftree = sys.argv[i]
+		elif sys.argv[i] == "-appnd":
+			i = i + 1
+			sappend = sys.argv[i]
+	
+	if sstep == "extract_placements":
+		extract_placement3(nfin_place = sjplace, nfin_aln = saln, nfout = sfolder+"me", logfile = sfolder + "spcount.log")
+	elif sstep == "build_tree_for_placement":
+		if stask == "script_only":
+			print_cluster_script_ME_tree(nfolder = sfolder, apd = sappend) 
+	
+	
+	
 	
