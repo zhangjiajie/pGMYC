@@ -779,7 +779,7 @@ if __name__ == "__main__":
 	#raxml_g(nfolder = "/home/zhangje/biosoup/production/EPA/", nfout = "/home/zhangje/biosoup/production/EPA/ttt", nref_align = "/home/zhangje/biosoup/production/EPA/ref_outs_547.fas", suf = "mttree")
 	#print estimate_ref_exp_rate("/home/zhangje/GIT/gGMYC/biosoup/production/Test/ref_out547.tre")
 	#otu_picking(nfolder = "/home/zhangje/GIT/gGMYC/Test/", nfout1 = "/home/zhangje/GIT/gGMYC/Test/bds_leaf_picked_otus.fasta", nfout2 = "/home/zhangje/GIT/gGMYC/Test/bds_inode_picked_otus.fasta", nref_tree = "/home/zhangje/GIT/biosoup/production/ref_out547.tre", n_align = "/home/zhangje/GIT/biosoup/production/454.epainput.chimerafree.fasta", suf = "subtree")
-	stas(sfin = "/home/zhangje/GIT/gGMYC/spcount.log")
+	#stas(sfin = "/home/zhangje/GIT/gGMYC/spcount.log")
 	
 	#extract_placement3(nfin_place = "/home/zhangje/GIT/biosoup/production/EPA4/454.cfree.jpalce", nfin_aln = "/home/zhangje/GIT/biosoup/production/EPA4/454.epainput.chimerafree.fasta", nfout = "/home/zhangje/GIT/biosoup/production/EPA4/bds", logfile = "/home/zhangje/GIT/biosoup/production/EPA4/spcount.log")
 	#extract_placement3(nfin_place = "/home/zhangje/GIT/biosoup/production/Reduced/RAxML_portableTree.81_1.jplace", nfin_aln = "/home/zhangje/GIT/biosoup/production/Reduced/origin_ref.fasta_81_1.fasta.combin.fasta", nfout = "/home/zhangje/GIT/biosoup/production/Reduced/bds", logfile = "/home/zhangje/GIT/biosoup/production/Reduced/spcount.log")
@@ -828,7 +828,17 @@ if __name__ == "__main__":
 		extract_placement3(nfin_place = sjplace, nfin_aln = saln, nfout = sfolder+"me", logfile = sfolder + "spcount.log")
 	elif sstep == "build_tree_for_placement":
 		if stask == "script_only":
-			print_cluster_script_ME_tree(nfolder = sfolder, apd = sappend) 
+			print_cluster_script_ME_tree(nfolder = sfolder, apd = sappend)
+		elif stask == "subtree_extract":
+			pass
+		elif stask == "run":
+			pass
+		
+	elif sstep == "otu_picking":
+		otu_picking(nfolder = sfolder, nfout1 = sfolder + "me_leaf_picked_otus.fasta", nfout2 = sfolder + "me_inode_picked_otus.fasta", nref_tree = sreftree, n_align = saln, suf = "subtree")
+	elif sstep == "summary":
+		stas(sfin = sfolder)
+ 
 	
 	
 	

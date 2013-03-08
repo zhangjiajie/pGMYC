@@ -110,10 +110,20 @@ def rm_redudent_seqs(aln_file_name):
 		return aln_file_name+".reduced"
 	else:
 		return aln_file_name
+		
+def rm_redudent_seqs_m(aln_file_name):
+	call(["raxmlHPC-PTHREADS-SSE3","-m","GTRGAMMA","-s",aln_file_name,"-f","c","-n","ck", "-T", "2"], stdout=open(os.devnull, "w"), stderr=subprocess.STDOUT)
+	
+	if os.path.exists(aln_file_name+".reduced"):
+		#print("redundet seqs removed")
+		os.remove("RAxML_info." + "ck")
+		return aln_file_name+".reduced"
+	else:
+		return aln_file_name
 
 
 #step0: pre-process simulated alignment:
-def pre_pro_aln(nfin, nfout):
+def pre_pro_aln(nfin, nfout, numcpu = 1):
 	fin=open(nfin,"r")
 	fout=open(nfout,"w")
 	l=fin.readline().strip()
@@ -124,8 +134,11 @@ def pre_pro_aln(nfin, nfout):
 	fout.close()
 	os.remove(nfin)
 	os.rename(nfout, nfin)
-	
-	faln = rm_redudent_seqs(nfin)
+	faln = None 
+	if numcpu == 1:
+		faln = rm_redudent_seqs(nfin)
+	else:
+		faln = rm_redudent_seqs_m(nfin)
 	return faln
 
 
@@ -166,6 +179,15 @@ def build_ref_tree(nfin, nfout):
 	os.remove("RAxML_result." + nfout)
 	return nfout + ".tre"
 
+
+def build_ref_tree_m(nfin, nfout, numcpu = 2):
+	call(["raxmlHPC-PTHREADS-SSE3","-m","GTRGAMMA","-s",nfin,"-n",nfout,"-p", "1234", "-T", numcpu], stdout=open(os.devnull, "w"), stderr=subprocess.STDOUT)
+	os.rename("RAxML_bestTree."+nfout, nfout + ".tre")
+	os.remove("RAxML_info." + nfout)
+	os.remove("RAxML_log." + nfout)
+	os.remove("RAxML_parsimonyTree." + nfout)
+	os.remove("RAxML_result." + nfout)
+	return nfout + ".tre"
 
 #build tree with -g
 def build_constrain_tree(nsfin, ntfin, nfout):
@@ -567,34 +589,156 @@ def batch_test_gmyc(folder="./", suf = "phy", num_spe_tree = 10, sout = "log.txt
 
 
 #This will do batch test of mix exp model on original trees with 10 species
-def batch_mix_exp(folder="./", suf = "phy", num_spe_tree = 10, sout = "log.txt"):
+def batch_mix_exp(folder="./", suf = "phy", num_spe_tree = 10, sout = "log.txt", t = 1):
 	phyl = glob.glob(folder + "*." + suf)
-	num_correct = 0
+	print(folder + "*." + suf) 
+	rt_correct = 0
 	for phy in phyl:
-		fin1 = pre_pro_aln(nfin=phy, nfout="temp1")
-		fin2 = build_ref_tree(nfin = fin1, nfout = "temp2")
+		
+		fin1 = pre_pro_aln(nfin=phy, nfout="temp1", numcpu = t)
+		gt = ground_truth(fin1)
+		
+		fin2 = None
+		if t == 1:
+			fin2 = build_ref_tree(nfin = fin1, nfout = "temp2")
+		else:
+			fin2 = build_ref_tree_m(nfin = fin1, nfout = "temp2", numcpu = t)
 		me = EXP.exponential_mixture(fin2)
 		me.search(reroot = True, strategy = "H0")
 		num_spe = me.count_species(print_log = False)
-		logging([num_spe_tree],[num_spe],sout)
-		print("#species of " + phy + ": " + repr(num_spe))
+		splist = me.species_list
+		
+		num_correct = 0 
+		for spe in splist:
+			corr = gt.is_correct(spe)
+			if corr:
+				num_correct = num_correct + 1
 		os.remove(fin2)
+		print(num_correct)
+		rt_correct = rt_correct + float(num_correct)/float(gt.get_num_species())
+	print("Average correct ration: "  +  repr(rt_correct/float(len(phyl))))
+	print("num_correct:" + repr(rt_correct))
+	print("num_samples:" + repr(len(phyl)))
 
 
-def batch_gmyc_umtree(folder="./", suf = "phy", num_spe_tree = 10, sout = "log.txt"):
-	phyl = glob.glob(folder + "*." + suf)
-	num_correct = 0
+class ground_truth:
+	def __init__(self, refaln):
+		self.aln = SeqGroup(sequences=refaln, format='phylip_relaxed')
+		self.true_spe = {}
+		self._get_truth()
+		
+	
+	def _get_truth(self):
+		for entr in self.aln.get_entries():
+			name = entr[0]
+			gid = name.split(".")[0]
+			self.true_spe[gid] = []
+		
+		for entr in self.aln.get_entries():
+			name = entr[0]
+			gid = name.split(".")[0]
+			group = self.true_spe[gid]
+			group.append(name)
+			self.true_spe[gid] = group
+	
+	def is_correct(self,names):
+		names_set = set(names)
+		for key in self.true_spe.keys():
+			sps = self.true_spe[key]
+			sps_set = set(sps)
+			if names_set == sps_set:
+				return True
+		return False
+	
+	def get_num_species(self):
+		return len(self.true_spe.keys())
+
+
+def batch_gmyc_umtree(folder="./", suf = "simulate_tree", num_spe_tree = 10, sout = "log.txt"):
+	phyl = glob.glob(folder + suf +"*")
+	rt_correct = 0
 	for phy in phyl:
-		num_spe = GMYC.gmyc(tree = phy)
-		logging([num_spe_tree],[num_spe],sout)
-		print("#species of " + phy + ": " + repr(num_spe))
+		treename = phy.split("/")[-1]
+		alnname = treename.split("_")[-1]
+		palnname = alnname.split(".")
+		alnname = folder + "simulated_set_" + palnname[0] + "." + palnname[1] + "_" + palnname[2] + ".phy"
+		print(alnname)
+		c_alnname = alnname + ".c"
+		fin=open(alnname,"r")
+		fout=open(c_alnname,"w")
+		l=fin.readline().strip()
+		while l!="":
+			fout.write(l + "\n")
+			l=fin.readline().strip()
+		fin.close()
+		fout.close()
+		os.remove(alnname)
+		os.rename(c_alnname, alnname)
+		
+		
+		gt = ground_truth(alnname)
+		
+		spes = GMYC.gmyc(tree = phy)
+		
+		num_correct = 0 
+		for spe in spes:
+			corr = gt.is_correct(spe)
+			if corr:
+				num_correct = num_correct + 1
+		
+		print(num_correct)
+		rt_correct = rt_correct + float(num_correct)/float(gt.get_num_species())
+		
+	print("Average correct ration: "  +  repr(rt_correct/float(len(phyl))))
+	print("num_correct:" + repr(rt_correct))
+	print("num_samples:" + repr(len(phyl)))
+
+
+def batch_gmyc_umtree2(folder="./", suf = "simulate_tree", num_spe_tree = 10, sout = "log.txt"):
+	phyl = glob.glob(folder + suf +"*")
+	rt_correct = 0
+	for phy in phyl:
+		treename = phy.split("/")[-1]
+		alnname = treename.split("_")[-1]
+		palnname = alnname.split(".")
+		alnname = folder + "simulated_set_" + palnname[0] + "_" + palnname[1]  + ".phy"
+		print(alnname)
+		c_alnname = alnname + ".c"
+		fin=open(alnname,"r")
+		fout=open(c_alnname,"w")
+		l=fin.readline().strip()
+		while l!="":
+			fout.write(l + "\n")
+			l=fin.readline().strip()
+		fin.close()
+		fout.close()
+		os.remove(alnname)
+		os.rename(c_alnname, alnname)
+		
+		
+		gt = ground_truth(alnname)
+		
+		spes = GMYC.gmyc(tree = phy)
+		
+		num_correct = 0 
+		for spe in spes:
+			corr = gt.is_correct(spe)
+			if corr:
+				num_correct = num_correct + 1
+		
+		print(num_correct)
+		rt_correct = rt_correct + float(num_correct)/float(gt.get_num_species())
+		
+	print("Average correct ration: "  +  repr(rt_correct/float(len(phyl))))
+	print("num_correct:" + repr(rt_correct))
+	print("num_samples:" + repr(len(phyl)))
 
 
 
 if __name__ == "__main__":
 	
-	if len(sys.argv) < 8: 
-		print("usage: ./EXP_pipe.py -folder <folder contain test files> -suf <suffix of the test files> -num_spe <num of species per test file> -m <epa_me/epa_me_g/epa_gmyc/me/gmyc> -o <output file>")
+	if len(sys.argv) < 6: 
+		print("usage: ./EXP_pipe.py -folder <folder contain test files> -suf <suffix of the test files> -num_spe <num of species per test file> -m <epa_me/epa_me_g/epa_gmyc/me/gmyc> -o <output file> -T <num cpus> -pvflag")
 		sys.exit()
 	
 	sfolder = "./"
@@ -602,6 +746,8 @@ if __name__ == "__main__":
 	snum_spe = 10
 	method = "me"
 	sfout = "log.txt"
+	sT = 1
+	pvflag = False
 	
 	for i in range(len(sys.argv)):
 		if sys.argv[i] == "-folder":
@@ -619,9 +765,14 @@ if __name__ == "__main__":
 		elif sys.argv[i] == "-o":
 			i = i + 1
 			sfout = sys.argv[i]
+		elif sys.argv[i] == "-T":
+			i = i + 1
+			sT = int(sys.argv[i])
+		elif sys.argv[i] == "-pvflag":
+			pvflag = True
 	
 	if method == "me":
-		batch_mix_exp(folder = sfolder, suf = ssuf, num_spe_tree = snum_spe, sout = sfout)
+		batch_mix_exp(folder = sfolder, suf = ssuf, num_spe_tree = snum_spe, sout = sfout, t = sT)
 	elif method == "epa_me":
 		batch_test_me(folder = sfolder, suf = ssuf, num_spe_tree = snum_spe, sout = sfout)
 	elif method == "epa_me_g":
@@ -629,5 +780,8 @@ if __name__ == "__main__":
 	elif method == "epa_gmyc":
 		batch_test_gmyc(folder = sfolder, suf = ssuf, num_spe_tree = snum_spe, sout = sfout)
 	elif method == "gmyc":
-		batch_gmyc_umtree(folder = sfolder, suf = ssuf, num_spe_tree = snum_spe, sout = sfout)
+		if pvflag:
+			batch_gmyc_umtree(folder = sfolder, suf = ssuf, num_spe_tree = snum_spe, sout = sfout)
+		else:
+			batch_gmyc_umtree2(folder = sfolder, suf = ssuf, num_spe_tree = snum_spe, sout = sfout)
 

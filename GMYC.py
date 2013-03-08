@@ -115,11 +115,9 @@ class um_tree:
 					else:
 						wt = waiting_time(length = times, num_coas = 0, num_lines = curr_spe)
 						curr_spe = curr_spe + 1
-				if times > 0:
+				if times > 0.00000001:
 					wt_list.append(wt)
 		
-		if min_brl < 0.0001:
-			min_brl = 0.0001
 		
 		for wt in wt_list:
 			wt.count_num_lines()
@@ -271,19 +269,29 @@ class speciation:
 		self.rate = spe_rate
 	
 	def getBirthRate(self): # this is b
-		if self.num_lineages == 0:
+		if self.num_lineages <= 0:
 			return 0
 		else:
-			return self.rate * math.pow(self.num_lineages, self.p)
+			rv = 0
+			try:
+				rv = self.rate * math.pow(self.num_lineages, self.p)
+			except ValueError:
+				rv = 0
+			return rv
 		
 	def getNumDivEvent(self):
 		return self.num_lineages-1
 		
 	def bprime(self):
-		if self.num_lineages == 0:
+		if self.num_lineages <= 0:
 			return 0.0
 		else:
-			bp = self.p * self.rate * math.pow(self.num_lineages, (self.p - 1.0))
+			bp = 0
+			try:
+				bp = self.p * self.rate * math.pow(self.num_lineages, (self.p - 1.0))
+			except ValueError:
+				bp = 0
+			
 			return bp
 
 
@@ -294,13 +302,22 @@ class coalescent:
 		 self.p = p
 	
 	def getCoalesecntRate(self):
-		return self.rate * math.pow(self.num_individual * (self.num_individual - 1.0), self.p)
+		rv = 0
+		try:
+			rv = self.rate * math.pow(self.num_individual * (self.num_individual - 1.0), self.p)
+		except ValueError:
+			rv = 0 
+		return rv
 		
 	def getNumDivEvent(self):
 		return self.num_individual -1
 	
 	def bprime(self):
-		bp = self.p * self.rate * math.pow(self.num_individual * (self.num_individual - 1.0), (self.p - 1.0))
+		bp = 0
+		try:
+			bp = self.p * self.rate * math.pow(self.num_individual * (self.num_individual - 1.0), (self.p - 1.0))
+		except ValueError:
+			bp = 0
 		return bp
 
 
@@ -434,12 +451,24 @@ class waiting_time:
 			return math.log(prob)
 	
 	def scaleSpeBranchL(self):
-		return math.pow(self.spe_n, self.spe_p) * self.length
+		if self.spe_n < 0:
+			self.spe_n = 0.000001
+		
+		rvalue = 0
+		try:
+			rvalue = math.pow(self.spe_n, self.spe_p) * self.length
+		except ValueError:
+			rvalue = 0
+		return rvalue
 	
 	def scaleCoaBranchL(self):
 		br = 0
 		for coa in self.coas.coa_list:
-			br = br + math.pow(coa.num_individual * (coa.num_individual-1), self.coa_p) * self.length 
+			try:
+				br = br + math.pow(coa.num_individual * (coa.num_individual-1), self.coa_p) * self.length 
+			except ValueError:
+				pass
+				
 		return br
 		
 	def bprime_spe(self):
@@ -550,11 +579,21 @@ class null_model:
 		self.p = p
 		br_de = 0.0
 		for wt in self.wt_list:
-			br_de = br_de + wt.length * math.pow(wt.num_lines, self.p)
+			if wt.num_lines < 0:
+				wt.num_lines = 0
+			try:
+				br_de = br_de + wt.length * math.pow(wt.num_lines, self.p)
+			except ValueError:
+				pass
+				
 		self.rate = self.num_speEvent / br_de
 		logl = 0
 		for wt in self.wt_list:
-			logl = logl + math.log(self.rate * math.pow(wt.num_lines, self.p) * math.exp(self.rate * math.pow(wt.num_lines, self.p) * wt.length * -1.0))
+			try:
+				logl = logl + math.log(self.rate * math.pow(wt.num_lines, self.p) * math.exp(self.rate * math.pow(wt.num_lines, self.p) * wt.length * -1.0))
+			except ValueError:
+				pass
+				
 		return logl
 
 
@@ -660,9 +699,9 @@ def gmyc(tree, print_detail = False, show_tree = False, show_llh = False, show_l
 		utree.tree.show()
 	
 	if lrt.get_p_value() >= 0.01:
-		return len(one_spe)
+		return one_spe
 	else:
-		return len(spes)
+		return spes
 
 
 if __name__ == "__main__":
@@ -695,7 +734,7 @@ if __name__ == "__main__":
 		print("usage: ./EXP.py -t <tree_of_life.tre> -pd(print detail)  -st(show tree)  -sl(show llh plot)  -sn(show lineage number plot)  -ps(print species)")
 		sys.exit()
 	
-	numsp = gmyc(tree = stree, print_detail = sprint_detail, show_tree = sshow_tree, show_llh = sshow_llh, show_lineages = sshow_lineages, print_species = sprint_species)
-	print("Final number of estimated species by GMYC: " +  repr(numsp) )
+	sp = gmyc(tree = stree, print_detail = sprint_detail, show_tree = sshow_tree, show_llh = sshow_llh, show_lineages = sshow_lineages, print_species = sprint_species)
+	print("Final number of estimated species by GMYC: " +  repr(len(sp)) )
 
 
