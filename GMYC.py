@@ -55,6 +55,7 @@ class um_tree:
 		last_coa_num = 0
 		tcnt = 0 
 		for node in self.nodes:
+			num_children = len(node.get_children())
 			wt = None
 			times = node.age - curr_age
 			if times >= 0:

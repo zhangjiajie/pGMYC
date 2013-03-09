@@ -563,6 +563,39 @@ def raxml(nfolder, nfout, suf = "fasta"):
 		real_tree.write(outfile= aln.split(".")[0] + ".subtree", format=5)
 		#os.remove(trename)
 
+def subtrees(nfolder, pref = "RAxML_bestTree"):
+	ntrees = glob.glob(nfolder + pref + "*")
+	for tree in ntrees:
+		#print tree
+		if tree.split("/")[-1].startswith("RAxML_bestTree.me_leaf"):
+			full_tree = Tree(tree, format=1)
+			rootref = full_tree.get_leaves_by_name("root_ref")[0]
+			if rootref.up.is_root():
+				newrootnode = rootref.get_farthest_node()[0]
+				full_tree.set_outgroup(newrootnode)
+			
+			rootref = full_tree.get_leaves_by_name("root_ref")[0]
+			refroot_brl = rootref.dist
+			full_tree.set_outgroup(rootref)
+			real_tree = None
+			
+			for child in full_tree.get_children():
+				if not child.is_leaf():
+					real_tree = child
+					real_tree.up = None
+					real_tree.dist = 0.0
+					break
+		
+			lnode = find_lonest_br(real_tree)
+			if lnode.dist > refroot_brl:
+				real_tree.set_outgroup(lnode)
+				real_tree.dist = 0.0
+			
+			#RAxML_bestTree.me_leaf_93.fasta
+			
+			real_tree.write(outfile= nfolder + tree.split(".")[-2] + ".subtree", format=5)
+	
+	
 
 def estimate_ref_exp_rate(nfin):
 	ref_model = EXP.exponential_mixture(tree = nfin)
@@ -830,7 +863,8 @@ if __name__ == "__main__":
 		if stask == "script_only":
 			print_cluster_script_ME_tree(nfolder = sfolder, apd = sappend)
 		elif stask == "subtree_extract":
-			pass
+			print("Subtree")
+			subtrees(nfolder = sfolder, pref = "RAxML_bestTree")
 		elif stask == "run":
 			pass
 		
