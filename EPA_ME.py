@@ -45,7 +45,7 @@ def catalns(refs, alns, sfout):
 	fout = open(sfout, "w")
 	for aln in alns:
 		fout.write(aln)
-	fout.write("\n")
+	#fout.write("\n")
 	for ref in refs:
 		fout.write(ref)
 	fout.close()
@@ -129,6 +129,7 @@ def collapse_identical_seqs(f_fasta):
 	
 	fin.close()
 	fout.close()
+	return f_fasta+".collapse.fasta"
 
 
 def processHMMseq(seqin):
@@ -176,12 +177,13 @@ def parse_HMM(f_stock):
 				seqs[l2[0]] = seq + ss 
 		line = fin.readline()
 	fin.close()
-	fout = open(f_stock+".fasta", "w")
+	fout = open(f_stock+".afa", "w")
 	for key in seqs.keys():
-		if count_non_gap(seqs[key]) >= 100:
+		if count_non_gap(seqs[key]) >= 50:
 			fout.write(">" + key + "\n")
 			fout.write(seqs[key] + "\n")
 	fout.close()
+	return f_stock+".afa"
 
 
 def chimera_removal(nuseach, nalign, nout, chimeraout):
@@ -594,8 +596,8 @@ def subtrees(nfolder, pref = "RAxML_bestTree"):
 			#RAxML_bestTree.me_leaf_93.fasta
 			
 			real_tree.write(outfile= nfolder + tree.split(".")[-2] + ".subtree", format=5)
-	
-	
+
+
 
 def estimate_ref_exp_rate(nfin):
 	ref_model = EXP.exponential_mixture(tree = nfin)
@@ -749,7 +751,8 @@ def print_cluster_script_EPA(nfolder): #EPA
 		treename = tree.split("/")[-1]
 		alnname = str(treename[15:]) + ".combin.fasta"
 		print("/home/zhangje/bin/raxmlHPC-PTHREADS-SSE3 -m GTRGAMMA -p 1234 -T 48 -f v -s " + appd + alnname + " -n " + str(treename[32:-6]) + " -r " + appd + treename)
-		
+
+
 def print_cluster_script_ME_tree(nfolder, apd): #EPA
 	naln = glob.glob(nfolder + "me*fasta")
 	#appd = "/hits/sco/zhangje/biosoup/reduced_epa/"
@@ -762,7 +765,6 @@ def print_cluster_script_ME_tree(nfolder, apd): #EPA
 			#call(["/home/zhangje/bin/raxmlHPC-PTHREADS-SSE3","-m","GTRGAMMA","-s",nsfin, "-g", ntfin, "-n",nfout,"-p", "1234", "-T", "40"])#, stdout=open(os.devnull, "w"), stderr=subprocess.STDOUT)
 			mttreename = alnname.split(".")[-1] + ".mttree"
 			print("/home/zhangje/bin/raxmlHPC-PTHREADS-SSE3 -m GTRGAMMA -p 1234 -T 48 -s " + appd + alnname + " -n " + alnname + " -g " + appd + mttreename)
-
 
 
 def merge_align(nfolder, talign = "", pref = "origin_ref.fasta_"):
@@ -802,7 +804,68 @@ def count_reads(nfolder, pref = "bds_leaf_"):
 	print cnt
 
 
+def build_hmm_profile(faln, fbase=""):
+	#hmmbuild --informat afa refotu.hmm ref_outs_547.fas
+	call([fbase + "hmmbuild","--informat", "afa", faln+".hmm", faln]) #, stdout=open(os.devnull, "w"), stderr=subprocess.STDOUT)
+	return faln+".hmm"
+
+def hmm_align(fprofile, ffasta, fbase=""):
+	#hmmalign -o 454.stock refotu.hmm 454input.fna.min100.fasta
+	call([fbase + "hmmalign","-o", ffasta + ".stock", fprofile, ffasta]) #, stdout=open(os.devnull, "w"), stderr=subprocess.STDOUT)
+	return ffasta + ".stock"
+
+def trim_refalign_hmm(refaln, hmmprofile):
+	sites = []
+	hmp = open(hmmprofile)
+	l = hmp.readline()
+	start = False
+	while l!="":
+		if l.startswith("//"):
+			break
+		if start:
+			l = l.strip()
+			ll = l.split()
+			usedsite = int(ll[5])
+			sites.append(usedsite)
+			l = hmp.readline()
+			l = hmp.readline()
+		else:
+			if l.startswith("HMM "):
+				start = True
+				l = hmp.readline()
+				l = hmp.readline()
+				l = hmp.readline()
+				l = hmp.readline()
+		l = hmp.readline()
+	hmp.close()
+	align = SeqGroup(refaln)
+	fout = open(refaln+".trimed.afa", "w")
+	for entr in align.get_entries():
+		fout.write(">" + entr[0] + "\n")
+		for pos in sites:
+			fout.write(entr[1][pos-1])
+		fout.write("\n")
+	fout.close()
+	return refaln+".trimed.afa"
+
+
+def epa_ready(refaln, queryaln, hmmprofile):
+	trimaln = trim_refalign_hmm(refaln, hmmprofile)
+	af = open(trimaln)
+	aln = af.readlines()
+	af.close()
+	
+	cqali = collapse_identical_seqs(queryaln)
+	
+	bf = open(cqali)
+	bln = bf.readlines()
+	bf.close()
+	catalns(bln, aln, queryaln+".epainput")
+	return queryaln+".epainput"
+
+
 if __name__ == "__main__":
+	#trim_refalign_hmm(refaln = "/home/zhangje/GIT/16S/ref.afa", hmmprofile = "/home/zhangje/GIT/16S/ref.afa.hmm")
 	#remove_seq_len_smaller_than("/home/zhangje/GIT/gGMYC/biosoup/production/454input.fna", min_l = 100)
 	#collapse_identical_seqs("/home/zhangje/GIT/gGMYC/biosoup/production/454.stock.fasta")
 	#parse_HMM("/home/zhangje/GIT/gGMYC/biosoup/production/454.stock")
@@ -824,7 +887,8 @@ if __name__ == "__main__":
 	#print_cluster_script_EPA(nfolder = "/home/zhangje/GIT/gGMYC/biosoup/production/reduce_reftree/")
 	#merge_align(nfolder = "/home/zhangje/GIT/gGMYC/biosoup/production/reduce_reftree/", talign = "/home/zhangje/GIT/gGMYC/biosoup/production/reduce_reftree/454.chimerafree2.fasta", pref = "origin_ref.fasta_")
 	if len(sys.argv) < 3:
-		print("usage: ./EPA_ME.py -step <extract_placements/build_tree_for_placement/otu_picking/summary> -task <run/script_only/subtree_extract> -appnd <>  -folder <./> -jplace <*.jplace> -aln <*.fasta> -reftree <*.tre>")
+		print("usage: ./EPA_ME.py -step <hmmbuild/hmmalign/hmmparse/collapse/chimeras/epa_ready/extract_placements/build_tree_for_placement/otu_picking/summary> ")
+		print("-task <run/script_only/subtree_extract> -appnd <>  -folder <./> -jplace <*.jplace> -aln <*.fasta> -reftree <*.tre> -binbase <>" )
 		sys.exit() 
 		
 	sstep = ""
@@ -834,6 +898,7 @@ if __name__ == "__main__":
 	sjplace = ""
 	sreftree = ""
 	sappend = ""
+	binbase = ""
 	for i in range(len(sys.argv)):
 		if sys.argv[i] == "-step":
 			i = i + 1
@@ -856,6 +921,9 @@ if __name__ == "__main__":
 		elif sys.argv[i] == "-appnd":
 			i = i + 1
 			sappend = sys.argv[i]
+		elif sys.argv[i] == "-binbase":
+			i = i + 1
+			binbase = sys.argv[i]
 	
 	if sstep == "extract_placements":
 		extract_placement3(nfin_place = sjplace, nfin_aln = saln, nfout = sfolder+"me", logfile = sfolder + "spcount.log")
@@ -872,8 +940,27 @@ if __name__ == "__main__":
 		otu_picking(nfolder = sfolder, nfout1 = sfolder + "me_leaf_picked_otus.fasta", nfout2 = sfolder + "me_inode_picked_otus.fasta", nref_tree = sreftree, n_align = saln, suf = "subtree")
 	elif sstep == "summary":
 		stas(sfin = sfolder)
+	elif sstep == "hmmbuild":
+		build_hmm_profile(faln = saln, fbase=binbase)
+	elif sstep == "hmmalign":
+		hmm_align(fprofile = saln, ffasta = sfolder, fbase=binbase)
+	elif sstep == "hmmparse":
+		parse_HMM(saln)
+	elif sstep == "collapse":
+		collapse_identical_seqs(saln)
+	#elif sstep == "epa_ready":
+	#	epa_ready(refaln = saln, queryaln = sfolder, hmmprofile = sappend)
  
 	
-	
+	#step1: build_hmm_profile(faln = saln, fbase=binbase)
+	#step2: hmm_align(fprofile = saln, ffasta = sfolder, fbase=binbase)
+	#step3: parse_HMM(saln)
+	#step4: chimeras remove
+	#step5: epa_ready()
+	#step6: epa
+	#step7: extract_placement3(nfin_place = sjplace, nfin_aln = saln, nfout = sfolder+"me", logfile = sfolder + "spcount.log")
+	#step8: build raxml tree for each placement edge
+	#step9: otu_picking(nfolder = sfolder, nfout1 = sfolder + "me_leaf_picked_otus.fasta", nfout2 = sfolder + "me_inode_picked_otus.fasta", nref_tree = sreftree, n_align = saln, suf = "subtree")
+	#step10: stas(sfin = sfolder)
 	
 	

@@ -180,7 +180,7 @@ def build_ref_tree(nfin, nfout):
 	return nfout + ".tre"
 
 
-def build_ref_tree_m(nfin, nfout, numcpu = 2):
+def build_ref_tree_m(nfin, nfout, numcpu = "2"):
 	call(["raxmlHPC-PTHREADS-SSE3","-m","GTRGAMMA","-s",nfin,"-n",nfout,"-p", "1234", "-T", numcpu], stdout=open(os.devnull, "w"), stderr=subprocess.STDOUT)
 	os.rename("RAxML_bestTree."+nfout, nfout + ".tre")
 	os.remove("RAxML_info." + nfout)
@@ -589,17 +589,18 @@ def batch_test_gmyc(folder="./", suf = "phy", num_spe_tree = 10, sout = "log.txt
 
 
 #This will do batch test of mix exp model on original trees with 10 species
-def batch_mix_exp(folder="./", suf = "phy", num_spe_tree = 10, sout = "log.txt", t = 1):
+def batch_mix_exp(folder="./", suf = "phy", num_spe_tree = 10, sout = "log.txt", t = "1"):
 	phyl = glob.glob(folder + "*." + suf)
 	print(folder + "*." + suf) 
 	rt_correct = 0
+	rt_num = 0
 	for phy in phyl:
 		
 		fin1 = pre_pro_aln(nfin=phy, nfout="temp1", numcpu = t)
 		gt = ground_truth(fin1)
 		
 		fin2 = None
-		if t == 1:
+		if t == "1":
 			fin2 = build_ref_tree(nfin = fin1, nfout = "temp2")
 		else:
 			fin2 = build_ref_tree_m(nfin = fin1, nfout = "temp2", numcpu = t)
@@ -614,9 +615,14 @@ def batch_mix_exp(folder="./", suf = "phy", num_spe_tree = 10, sout = "log.txt",
 			if corr:
 				num_correct = num_correct + 1
 		os.remove(fin2)
-		print(num_correct)
+		print("correct: " + repr(num_correct))
+		print("delimit: " + repr(len(splist)))
+		print("overesti: " + repr((float(len(splist)) - float(gt.get_num_species()))/float(gt.get_num_species())))
+		rt_num = rt_num + (float(len(splist)) - float(gt.get_num_species()))/float(gt.get_num_species())
 		rt_correct = rt_correct + float(num_correct)/float(gt.get_num_species())
+		
 	print("Average correct ration: "  +  repr(rt_correct/float(len(phyl))))
+	print("Average overestimate: "  +  repr(rt_num/float(len(phyl))))
 	print("num_correct:" + repr(rt_correct))
 	print("num_samples:" + repr(len(phyl)))
 
@@ -657,6 +663,7 @@ class ground_truth:
 def batch_gmyc_umtree(folder="./", suf = "simulate_tree", num_spe_tree = 10, sout = "log.txt"):
 	phyl = glob.glob(folder + suf +"*")
 	rt_correct = 0
+	rt_num = 0
 	for phy in phyl:
 		treename = phy.split("/")[-1]
 		alnname = treename.split("_")[-1]
@@ -686,17 +693,22 @@ def batch_gmyc_umtree(folder="./", suf = "simulate_tree", num_spe_tree = 10, sou
 			if corr:
 				num_correct = num_correct + 1
 		
-		print(num_correct)
+		print("correct: " + repr(num_correct))
+		print("delimit: " + repr(len(spes)))
+		print("overesti: " + repr((float(len(spes)) - float(gt.get_num_species()))/float(gt.get_num_species())))
+		rt_num = rt_num + (float(len(spes)) - float(gt.get_num_species()))/float(gt.get_num_species())
 		rt_correct = rt_correct + float(num_correct)/float(gt.get_num_species())
 		
 	print("Average correct ration: "  +  repr(rt_correct/float(len(phyl))))
-	print("num_correct:" + repr(rt_correct))
-	print("num_samples:" + repr(len(phyl)))
+	print("Average overestimate: "  +  repr(rt_num/float(len(phyl))))
+	print("num_correct: " + repr(rt_correct))
+	print("num_samples: " + repr(len(phyl)))
 
 
 def batch_gmyc_umtree2(folder="./", suf = "simulate_tree", num_spe_tree = 10, sout = "log.txt"):
 	phyl = glob.glob(folder + suf +"*")
 	rt_correct = 0
+	rt_num = 0
 	for phy in phyl:
 		treename = phy.split("/")[-1]
 		alnname = treename.split("_")[-1]
@@ -726,12 +738,16 @@ def batch_gmyc_umtree2(folder="./", suf = "simulate_tree", num_spe_tree = 10, so
 			if corr:
 				num_correct = num_correct + 1
 		
-		print(num_correct)
+		print("correct: " + repr(num_correct))
+		print("delimit: " + repr(len(spes)))
+		print("overesti: " + repr((float(len(spes)) - float(gt.get_num_species()))/float(gt.get_num_species())))
+		rt_num = rt_num + (float(len(spes)) - float(gt.get_num_species()))/float(gt.get_num_species())
 		rt_correct = rt_correct + float(num_correct)/float(gt.get_num_species())
 		
 	print("Average correct ration: "  +  repr(rt_correct/float(len(phyl))))
-	print("num_correct:" + repr(rt_correct))
-	print("num_samples:" + repr(len(phyl)))
+	print("Average overestimate: "  +  repr(rt_num/float(len(phyl))))
+	print("num_correct: " + repr(rt_correct))
+	print("num_samples: " + repr(len(phyl)))
 
 
 
@@ -746,7 +762,7 @@ if __name__ == "__main__":
 	snum_spe = 10
 	method = "me"
 	sfout = "log.txt"
-	sT = 1
+	sT = "1"
 	pvflag = False
 	
 	for i in range(len(sys.argv)):
@@ -767,7 +783,7 @@ if __name__ == "__main__":
 			sfout = sys.argv[i]
 		elif sys.argv[i] == "-T":
 			i = i + 1
-			sT = int(sys.argv[i])
+			sT = sys.argv[i]
 		elif sys.argv[i] == "-pvflag":
 			pvflag = True
 	

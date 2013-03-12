@@ -481,7 +481,7 @@ class exponential_mixture:
 			print("P-value:" + repr(pvalue))
 			self.max_setting.e1.write_file()
 			self.max_setting.e2.write_file()
-		if pvalue < 0.001:
+		if pvalue < 0.01:
 			num_sp, self.species_list = self.max_setting.count_species()
 			return num_sp
 		else:
