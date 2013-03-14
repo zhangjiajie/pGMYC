@@ -90,7 +90,7 @@ def count_and_pick_reads(align, outputfile):
 
 def remove_seq_len_smaller_than(f_fasta, min_l):
 	fin = open(f_fasta)
-	fout = open(f_fasta+".min"+repr(min_l)+".fasta", "a")
+	fout = open(f_fasta+".min"+repr(min_l)+".afa", "w")
 	line = fin.readline().strip()
 	lastname = ""
 	while line!="":
@@ -108,7 +108,7 @@ def remove_seq_len_smaller_than(f_fasta, min_l):
 
 def collapse_identical_seqs(f_fasta):
 	fin = open(f_fasta)
-	fout = open(f_fasta+".collapse.fasta", "a")
+	fout = open(f_fasta+".collapse.afa", "w")
 	seq_list=[]
 	line = fin.readline().strip()
 	while line!="":
@@ -129,7 +129,7 @@ def collapse_identical_seqs(f_fasta):
 	
 	fin.close()
 	fout.close()
-	return f_fasta+".collapse.fasta"
+	return f_fasta+".collapse.afa"
 
 
 def processHMMseq(seqin):
@@ -210,7 +210,7 @@ def chimera_removal(nuseach, nalign, nout, chimeraout):
 
 
 #correct rooting method, this shound run after EPA
-def extract_placement3(nfin_place, nfin_aln, nfout, min_lw = 0.9, logfile = "spcount.log"):
+def extract_placement3(nfin_place, nfin_aln, nfout, min_lw = 0.6, logfile = "spcount.log"):
 	jsondata = open (nfin_place)
 	align_orgin = SeqGroup(sequences = nfin_aln)
 	data = json.load(jsondata)
@@ -240,7 +240,7 @@ def extract_placement3(nfin_place, nfin_aln, nfout, min_lw = 0.9, logfile = "spc
 			placemap[curredge] = placemap.get(curredge, [])
 	
 	"""placement quality control"""
-	discard_file = open(nfout+"discard.placement.txt", "w")
+	discard_file = open(nfout+".discard.placement.txt", "w")
 	"""group taxa to edges"""
 	for placement in placements:
 		edges = placement["p"]
@@ -300,13 +300,13 @@ def extract_placement3(nfin_place, nfin_aln, nfout, min_lw = 0.9, logfile = "spc
 				newalign.set_seq("root_ref", og_seq) #set the outgroup name
 				place_seq = align_orgin.get_seq(place_node.name)
 				newalign.set_seq("*R*" + place_node.name, place_seq) #set the reference sequence name
-				newalign.write(outfile = nfout + "_leaf_"+repr(cnt_leaf) + ".fasta")
+				newalign.write(outfile = nfout + "_leaf_"+repr(cnt_leaf) + ".lfa")
 			else:
 				og_seq = align_orgin.get_seq(outgroup_name)
 				newalign.set_seq("root_ref", og_seq) #set the outgroup name
 				place_seq = align_orgin.get_seq(place_node.name)
 				newalign.set_seq("*R*" + place_node.name, place_seq) #set the reference sequence name
-				newalign.write(outfile = nfout + "_leaf_"+repr(cnt_leaf) + ".fasta")
+				newalign.write(outfile = nfout + "_leaf_"+repr(cnt_leaf) + ".lfa")
 		else:
 			"""genrate the newwick string to be inserted into the ref tree"""
 			rep = re.compile(r"\{[0-9]*\}")
@@ -333,7 +333,7 @@ def extract_placement3(nfin_place, nfin_aln, nfout, min_lw = 0.9, logfile = "spc
 					sname = entr[0]
 					seqe = entr[1]
 					newalign.set_seq(sname, seq)
-				newalign.write(outfile = nfout + "_inode_"+repr(cnt_inode) + ".fasta")
+				newalign.write(outfile = nfout + "_inode_"+repr(cnt_inode) + ".ifa")
 				mtfc_out = open(nfout + "_inode_"+repr(cnt_inode) +  ".mttree", "w")
 				mtfc_out.write(mtfc_tree)
 				mtfc_out.close()
@@ -440,8 +440,8 @@ def extract_placement2(nfin_place, nfin_aln, nfout):
 
 
 #build tree with -g
-def build_constrain_tree(nsfin, ntfin, nfout):
-	call(["/home/zhangje/bin/raxmlHPC-PTHREADS-SSE3","-m","GTRGAMMA","-s",nsfin, "-g", ntfin, "-n",nfout,"-p", "1234", "-T", "40"])#, stdout=open(os.devnull, "w"), stderr=subprocess.STDOUT)
+def build_constrain_tree(nsfin, ntfin, nfout, nfolder, num_thread = "1"):
+	call(["bin/raxmlHPC-PTHREADS-SSE3","-m","GTRGAMMA","-s",nsfin, "-g", ntfin, "-n",nfout,"-p", "1234", "-T", num_thread, "-w", nfolder])#, stdout=open(os.devnull, "w"), stderr=subprocess.STDOUT)
 	os.rename("RAxML_bestTree."+nfout, nfout + ".tre")
 	os.remove("RAxML_info." + nfout)
 	os.remove("RAxML_log." + nfout)
@@ -451,7 +451,7 @@ def build_constrain_tree(nsfin, ntfin, nfout):
 
 #build tree with -g
 def build_constrain_tree_l(nsfin, ntfin, nfout):
-	call(["raxmlHPC-SSE3","-m","GTRGAMMA","-s",nsfin, "-g", ntfin, "-n",nfout,"-p", "1234"]) #, stdout=open(os.devnull, "w"), stderr=subprocess.STDOUT)
+	call(["bin/raxmlHPC-SSE3","-m","GTRGAMMA","-s",nsfin, "-g", ntfin, "-n",nfout,"-p", "1234"]) #, stdout=open(os.devnull, "w"), stderr=subprocess.STDOUT)
 	os.rename("RAxML_bestTree."+nfout, nfout + ".tre")
 	os.remove("RAxML_info." + nfout)
 	os.remove("RAxML_log." + nfout)
@@ -510,14 +510,14 @@ def build_ref_tree_l(nfin, nfout):
 
 
 #build a tree
-def build_ref_tree(nfin, nfout):
-	call(["/home/zhangje/bin/raxmlHPC-PTHREADS-SSE3","-m","GTRGAMMA","-s",nfin,"-n",nfout,"-p", "1234", "-T", "44"], stdout=open(os.devnull, "w"), stderr=subprocess.STDOUT)
-	os.rename("RAxML_bestTree."+nfout, nfout + ".tre")
-	os.remove("RAxML_info." + nfout)
-	os.remove("RAxML_log." + nfout)
-	os.remove("RAxML_parsimonyTree." + nfout)
-	os.remove("RAxML_result." + nfout)
-	return nfout + ".tre"
+def build_ref_tree(nfin, nfout, nfolder, num_thread = "1"):
+	call(["bin/raxmlHPC-PTHREADS-SSE3","-m","GTRGAMMA","-s",nfin,"-n",nfout,"-p", "1234", "-T", num_thread, "-w", nfolder], stdout=open(os.devnull, "w"), stderr=subprocess.STDOUT)
+	os.rename(nfolder + "RAxML_bestTree."+nfout, nfolder + nfout + ".tre")
+	os.remove(nfolder + "RAxML_info." + nfout)
+	os.remove(nfolder + "RAxML_log." + nfout)
+	os.remove(nfolder + "RAxML_parsimonyTree." + nfout)
+	os.remove(nfolder + "RAxML_result." + nfout)
+	return nfolder + nfout + ".tre"
 
 
 def compare_node(node):
@@ -565,6 +565,7 @@ def raxml(nfolder, nfout, suf = "fasta"):
 		real_tree.write(outfile= aln.split(".")[0] + ".subtree", format=5)
 		#os.remove(trename)
 
+
 def subtrees(nfolder, pref = "RAxML_bestTree"):
 	ntrees = glob.glob(nfolder + pref + "*")
 	for tree in ntrees:
@@ -596,7 +597,6 @@ def subtrees(nfolder, pref = "RAxML_bestTree"):
 			#RAxML_bestTree.me_leaf_93.fasta
 			
 			real_tree.write(outfile= nfolder + tree.split(".")[-2] + ".subtree", format=5)
-
 
 
 def estimate_ref_exp_rate(nfin):
@@ -720,7 +720,6 @@ def stas(sfin):
 	print(">=1 nomatch OTUs: " + repr(nomatch1))
 
 
-
 def random_remove_taxa(falign, num_remove, num_repeat = 10):
 	align = SeqGroup(sequences = falign)
 	entrs = align.get_entries()
@@ -806,13 +805,15 @@ def count_reads(nfolder, pref = "bds_leaf_"):
 
 def build_hmm_profile(faln, fbase=""):
 	#hmmbuild --informat afa refotu.hmm ref_outs_547.fas
-	call([fbase + "hmmbuild","--informat", "afa", faln+".hmm", faln]) #, stdout=open(os.devnull, "w"), stderr=subprocess.STDOUT)
+	call(["bin/hmmbuild","--informat", "afa", faln+".hmm", faln]) #, stdout=open(os.devnull, "w"), stderr=subprocess.STDOUT)
 	return faln+".hmm"
+
 
 def hmm_align(fprofile, ffasta, fbase=""):
 	#hmmalign -o 454.stock refotu.hmm 454input.fna.min100.fasta
-	call([fbase + "hmmalign","-o", ffasta + ".stock", fprofile, ffasta]) #, stdout=open(os.devnull, "w"), stderr=subprocess.STDOUT)
+	call(["bin/hmmalign","-o", ffasta + ".stock", fprofile, ffasta]) #, stdout=open(os.devnull, "w"), stderr=subprocess.STDOUT)
 	return ffasta + ".stock"
+
 
 def trim_refalign_hmm(refaln, hmmprofile):
 	sites = []
@@ -849,22 +850,88 @@ def trim_refalign_hmm(refaln, hmmprofile):
 	return refaln+".trimed.afa"
 
 
-def epa_ready(refaln, queryaln, hmmprofile):
+def epa_ready(refaln, queryaln, hmmprofile, folder, T = "1" ):
 	trimaln = trim_refalign_hmm(refaln, hmmprofile)
+	ref_tree = build_ref_tree(nfin = trimaln, nfout = "reftree", nfolder = folder, num_thread = T)
 	af = open(trimaln)
 	aln = af.readlines()
 	af.close()
-	
 	cqali = collapse_identical_seqs(queryaln)
-	
-	bf = open(cqali)
+	chimera_free = run_uchime(sref = trimaln, squery = cqali)
+	bf = open(chimera_free)
 	bln = bf.readlines()
 	bf.close()
 	catalns(bln, aln, queryaln+".epainput")
-	return queryaln+".epainput"
+	clean(sfolder = folder)
+	return queryaln+".epainput", ref_tree
 
+
+def epa_nohmm(refaln, queryaln, folder, T = "1" ):
+	"""input reference alignment and alinged query sequences"""
+	print("Building refrence tree")
+	ref_tree = build_ref_tree(nfin = refaln, nfout = queryaln.split("/")[-1], nfolder = folder, num_thread = T)
+	af = open(refaln)
+	aln = af.readlines()
+	af.close()
+	print("Collapsing identical sequences")
+	cqali = collapse_identical_seqs(queryaln)
+	chimera_free = run_uchime(sref = refaln, squery = cqali)
+	bf = open(chimera_free)
+	bln = bf.readlines()
+	bf.close()
+	catalns(bln, aln, queryaln+".epainput")
+	os.remove(chimera_free)
+	os.remove(cqali)
+	print("Running epa")
+	fplacement = run_epa(query = queryaln+".epainput", reftree = ref_tree, folder = folder, num_thread = T)
+	clean(sfolder = folder)
+	return queryaln+".epainput", ref_tree, fplacement
+
+
+def uchime_ready(sfin):
+	fin = open(sfin)
+	lines = fin.readlines()
+	fin.close()
+	fout = open(sfin+".uchime", "w")
+	for line in lines:
+		line = line.replace("-", "")
+		fout.write(line)
+	fout.close()
+	return sfin+".uchime"
+
+
+def run_uchime(sref, squery, fbase = ""):
+	newref = uchime_ready(sref)
+	newquery = uchime_ready(squery)
+	call(["bin/usearch","-uchime_ref", newquery, "-db", newref, "-uchimeout", squery + ".uchimeout", "-strand", "plus"], stdout=open(os.devnull, "w"), stderr=subprocess.STDOUT)
+	chimera_removal(nuseach = squery + ".uchimeout", nalign = squery, nout = squery + ".chimerafree", chimeraout = squery + ".chimera")
+	os.remove(newref)
+	os.remove(newquery)
+	return squery + ".chimerafree"
+
+
+def run_epa(query, reftree, folder, num_thread = "1", binbase = ""):
+	print(folder + "RAxML_portableTree."+query.split("/")[-1]+".jplace")
+	call(["bin/raxmlHPC-PTHREADS-SSE3","-m","GTRGAMMA","-s",query, "-r", reftree, "-n", query.split("/")[-1],"-p", "1234", "-T", num_thread, "-f", "v", "-w", folder], stdout=open(os.devnull, "w"), stderr=subprocess.STDOUT)
+	os.rename(folder + "RAxML_portableTree."+query.split("/")[-1]+".jplace", folder + query.split("/")[-1] + ".jplace")
+	os.remove(folder + "RAxML_classification." + query.split("/")[-1])
+	os.remove(folder + "RAxML_labelledTree." +query.split("/")[-1])
+	os.remove(folder + "RAxML_originalLabelledTree." +query.split("/")[-1])
+	os.remove(folder + "RAxML_classificationLikelihoodWeights." +query.split("/")[-1])
+	os.remove(folder + "RAxML_entropy." +query.split("/")[-1])
+	os.remove(folder + "RAxML_info." +query.split("/")[-1])
+	return folder + query.split("/")[-1] +".jplace"
+
+
+def clean(sfolder):
+	jks = glob.glob(sfolder + "*.reduced")
+	for jk in jks:
+		os.remove(jk)
 
 if __name__ == "__main__":
+	#epa_nohmm(refaln = "/home/zhangje/GIT/16S/test/ref.afa", queryaln= "/home/zhangje/GIT/16S/test/query.afa" , folder= "/home/zhangje/GIT/16S/test/", T = "2" )
+	extract_placement3(nfin_place = "/home/zhangje/GIT/16S/test/query.afa.epainput.jplace", nfin_aln = "/home/zhangje/GIT/16S/test/query.afa.epainput", nfout, min_lw = 0.6, logfile = "spcount.log")
+	#run_uchime(sref = "/home/zhangje/GIT/16S/ref.afa", squery = "/home/zhangje/GIT/16S/query.fa.stock.afa.collapse.fasta", fbase = "Usearch/")
 	#trim_refalign_hmm(refaln = "/home/zhangje/GIT/16S/ref.afa", hmmprofile = "/home/zhangje/GIT/16S/ref.afa.hmm")
 	#remove_seq_len_smaller_than("/home/zhangje/GIT/gGMYC/biosoup/production/454input.fna", min_l = 100)
 	#collapse_identical_seqs("/home/zhangje/GIT/gGMYC/biosoup/production/454.stock.fasta")
@@ -887,8 +954,8 @@ if __name__ == "__main__":
 	#print_cluster_script_EPA(nfolder = "/home/zhangje/GIT/gGMYC/biosoup/production/reduce_reftree/")
 	#merge_align(nfolder = "/home/zhangje/GIT/gGMYC/biosoup/production/reduce_reftree/", talign = "/home/zhangje/GIT/gGMYC/biosoup/production/reduce_reftree/454.chimerafree2.fasta", pref = "origin_ref.fasta_")
 	if len(sys.argv) < 3:
-		print("usage: ./EPA_ME.py -step <hmmbuild/hmmalign/hmmparse/collapse/chimeras/epa_ready/extract_placements/build_tree_for_placement/otu_picking/summary> ")
-		print("-task <run/script_only/subtree_extract> -appnd <>  -folder <./> -jplace <*.jplace> -aln <*.fasta> -reftree <*.tre> -binbase <>" )
+		print("usage: ./EPA_ME.py -step <hmmbuild/hmmalign/hmmparse/collapse/chimeras/epa_ready/epa/extract_placements/build_tree_for_placement/otu_picking/summary> ")
+		print("-task <run/script_only/subtree_extract> -appnd <>  -folder <./> -jplace <*.jplace> -aln <*.fasta> -reftree <*.tre> -binbase <> -T <num_thread>" )
 		sys.exit() 
 		
 	sstep = ""
@@ -899,6 +966,7 @@ if __name__ == "__main__":
 	sreftree = ""
 	sappend = ""
 	binbase = ""
+	numt = "1"
 	for i in range(len(sys.argv)):
 		if sys.argv[i] == "-step":
 			i = i + 1
@@ -924,9 +992,12 @@ if __name__ == "__main__":
 		elif sys.argv[i] == "-binbase":
 			i = i + 1
 			binbase = sys.argv[i]
+		elif sys.argv[i] == "-T":
+			i = i + 1
+			numt = sys.argv[i]
 	
 	if sstep == "extract_placements":
-		extract_placement3(nfin_place = sjplace, nfin_aln = saln, nfout = sfolder+"me", logfile = sfolder + "spcount.log")
+		extract_placement3(nfin_place = sjplace, nfin_aln = saln, nfout = sfolder+"me", logfile = sfolder + "spcount.log", min_lw = 0.6)
 	elif sstep == "build_tree_for_placement":
 		if stask == "script_only":
 			print_cluster_script_ME_tree(nfolder = sfolder, apd = sappend)
@@ -948,8 +1019,10 @@ if __name__ == "__main__":
 		parse_HMM(saln)
 	elif sstep == "collapse":
 		collapse_identical_seqs(saln)
-	#elif sstep == "epa_ready":
-	#	epa_ready(refaln = saln, queryaln = sfolder, hmmprofile = sappend)
+	elif sstep == "epa_ready":
+		epa_ready(refaln = saln, queryaln = sfolder, hmmprofile = sappend)
+	elif sstep == "epa":
+		run_epa(query = saln, reftree = sreftree, num_thread = "1", binbase="", folder = sfolder)
  
 	
 	#step1: build_hmm_profile(faln = saln, fbase=binbase)
