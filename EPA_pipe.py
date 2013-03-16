@@ -7,6 +7,7 @@ import GMYC
 import sys
 import subprocess
 import re
+#from EPA_ME_Test import epa_me_species_counting
 from ete2 import Tree
 from ete2 import SeqGroup
 from subprocess import call
@@ -102,20 +103,16 @@ def gen_alignment(seq_names = [], alignment = SeqGroup(), outputfile = "epa_pars
 
 
 def rm_redudent_seqs(aln_file_name):
-	call(["raxmlHPC-SSE3","-m","GTRGAMMA","-s",aln_file_name,"-f","c","-n","ck"], stdout=open(os.devnull, "w"), stderr=subprocess.STDOUT)
-	
+	call(["bin/raxmlHPC-SSE3","-m","GTRGAMMA","-s",aln_file_name,"-f","c","-n","ck"], stdout=open(os.devnull, "w"), stderr=subprocess.STDOUT)
 	if os.path.exists(aln_file_name+".reduced"):
-		#print("redundet seqs removed")
 		os.remove("RAxML_info." + "ck")
 		return aln_file_name+".reduced"
 	else:
 		return aln_file_name
 		
 def rm_redudent_seqs_m(aln_file_name):
-	call(["raxmlHPC-PTHREADS-SSE3","-m","GTRGAMMA","-s",aln_file_name,"-f","c","-n","ck", "-T", "2"], stdout=open(os.devnull, "w"), stderr=subprocess.STDOUT)
-	
+	call(["bin/raxmlHPC-PTHREADS-SSE3","-m","GTRGAMMA","-s",aln_file_name,"-f","c","-n","ck", "-T", "2"], stdout=open(os.devnull, "w"), stderr=subprocess.STDOUT)
 	if os.path.exists(aln_file_name+".reduced"):
-		#print("redundet seqs removed")
 		os.remove("RAxML_info." + "ck")
 		return aln_file_name+".reduced"
 	else:
@@ -167,6 +164,49 @@ def extract_ref_alignment(nfin, nfout, num_prune = 0):
 	fout.close()
 	fin.close()
 	return nfout
+
+
+#step1: extract ref alignment
+def extract_ref_query_alignment(nfin, nfout):
+	fin = open(nfin,"r")
+	foutr = open(nfout+".ref.afa","w")
+	foutq = open(nfout+".query.afa", "w")
+	 
+	l=fin.readline()
+	seqlen = l.split()[1]
+	
+	rseq_list=[]
+	qseq_list=[]
+	
+	l=fin.readline().strip()
+	while l!="":
+		ls=l.split()
+		tname=ls[0]
+		if tname.endswith("r"):
+			rseq_list.append(l)
+		else:
+			qseq_list.append(l)
+			
+		l=fin.readline().strip()
+	
+	for seq in rseq_list:
+		seqs = seq.split()
+		name = seqs[0]
+		s = seqs[1]
+		foutr.write(">" + name + "\n")
+		foutr.write(s + "\n")
+	
+	for seq in qseq_list:
+		seqs = seq.split()
+		name = seqs[0]
+		s = seqs[1]
+		foutq.write(">" + name + "\n")
+		foutq.write(s + "\n")
+		
+	foutr.close()
+	foutq.close()
+	fin.close()
+	return nfout + nfout+".ref.afa", nfout+".query.afa"
 
 
 #step2: build ref tree
@@ -628,8 +668,11 @@ def batch_mix_exp(folder="./", suf = "phy", num_spe_tree = 10, sout = "log.txt",
 
 
 class ground_truth:
-	def __init__(self, refaln):
-		self.aln = SeqGroup(sequences=refaln, format='phylip_relaxed')
+	def __init__(self, refaln, type = ""):
+		if type == "fasta":
+			self.aln = SeqGroup(sequences=refaln)
+		else:
+			self.aln = SeqGroup(sequences=refaln, format='phylip_relaxed')
 		self.true_spe = {}
 		self._get_truth()
 		
@@ -648,7 +691,15 @@ class ground_truth:
 			self.true_spe[gid] = group
 	
 	def is_correct(self,names):
-		names_set = set(names)
+		#*R*
+		newnames = []
+		for name in names:
+			if name.startswith("*R*"):
+				pass
+			else:
+				newnames.append(name)
+			
+		names_set = set(newnames)
 		for key in self.true_spe.keys():
 			sps = self.true_spe[key]
 			sps_set = set(sps)
@@ -752,6 +803,10 @@ def batch_gmyc_umtree2(folder="./", suf = "simulate_tree", num_spe_tree = 10, so
 
 
 if __name__ == "__main__":
+	
+	extract_ref_query_alignment(nfin = "/home/zhangje/Desktop/simulated_set_10_2.phy", nfout = "/home/zhangje/Desktop/cao")
+	#epa_me_species_counting(refaln = "/home/zhangje/Desktop/test/ref.afa", queryaln = "/home/zhangje/Desktop/test/query.afa", folder="/home/zhangje/Desktop/test/" )
+	
 	
 	if len(sys.argv) < 6: 
 		print("usage: ./EXP_pipe.py -folder <folder contain test files> -suf <suffix of the test files> -num_spe <num of species per test file> -m <epa_me/epa_me_g/epa_gmyc/me/gmyc> -o <output file> -T <num cpus> -pvflag")

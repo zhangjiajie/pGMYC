@@ -9,6 +9,7 @@ import glob
 import EXP
 import subprocess
 import random
+import EPA_pipe
 from ete2 import Tree, TreeStyle, TextFace, SeqGroup, NodeStyle
 from scipy.optimize import fmin
 from collections import deque
@@ -260,6 +261,8 @@ def extract_placement(nfin_place, nfin_aln, nfout, min_lw = 0.6, logfile = "spco
 	cnt_leaf = 0
 	cnt_inode = 0
 	
+	spes = []
+	
 	"""check each edge""" 
 	for i,item in enumerate(groups):
 		seqset_name = item[0]
@@ -325,6 +328,11 @@ def extract_placement(nfin_place, nfin_aln, nfout, min_lw = 0.6, logfile = "spco
 				seq = align_orgin.get_seq(taxa)
 				newalign.set_seq(taxa, seq)
 			if len(newalign.get_entries()) < 2:
+				onesep = []
+				for entr in newalign.get_entries():
+					onesep.append(entr[0])
+				spes.append(onesep)
+				
 				count_and_pick_reads(align = newalign, outputfile = nfout + "_inode_picked_otus.fasta")
 				sp_log(sfout = logfile, logs="I	the palcement is on an internal node \nD	find new species\nK	reads number: 1 \n")
 			else:
@@ -338,6 +346,7 @@ def extract_placement(nfin_place, nfin_aln, nfout, min_lw = 0.6, logfile = "spco
 				mtfc_out = open(nfout + "_inode_"+repr(cnt_inode) +  ".mttree", "w")
 				mtfc_out.write(mtfc_tree)
 				mtfc_out.close()
+	return spes
 
 
 #build tree with -g
@@ -351,7 +360,7 @@ def build_constrain_tree(nsfin, ntfin, nfout, nfolder, num_thread = "1"):
 
 
 #build a tree
-def build_ref_tree(nfin, nfout, nfolder, num_thread = "1"):
+def build_ref_tree(nfin, nfout, nfolder, num_thread = "2"):
 	call(["bin/raxmlHPC-PTHREADS-SSE3","-m","GTRGAMMA","-s",nfin,"-n",nfout,"-p", "1234", "-T", num_thread, "-w", nfolder], stdout=open(os.devnull, "w"), stderr=subprocess.STDOUT)
 	os.rename(nfolder + "RAxML_bestTree."+nfout, nfolder + nfout + ".tre")
 	os.remove(nfolder + "RAxML_info." + nfout)
@@ -499,6 +508,7 @@ def otu_picking(nfolder, nfout1, nfout2, nref_tree, n_align, suf = "subtree"):
 	trees = glob.glob(nfolder + "*." + suf)
 	spe_rate = estimate_ref_exp_rate(nref_tree)
 	align = SeqGroup(sequences = n_align)
+	spes = []
 	for tree in trees:
 		print(tree)
 		logss = ""
@@ -516,6 +526,7 @@ def otu_picking(nfolder, nfout1, nfout2, nref_tree, n_align, suf = "subtree"):
 			epa_exp.search(reroot = False, strategy = "H0")
 			logss = logss + "M	H0\n"
 		num_spe = epa_exp.count_species(print_log = False)
+		spes.extend(epa_exp.species_list)
 		
 		logss = logss + "N	find number specices: " + repr(num_spe) + "\n"
 		
@@ -535,6 +546,7 @@ def otu_picking(nfolder, nfout1, nfout2, nref_tree, n_align, suf = "subtree"):
 				logss = logss + morelog
 			
 		sp_log(sfout = nfolder + "spcount.log", logs = logss)
+	return spes
 
 
 def stas(sfin):
@@ -725,9 +737,10 @@ def hmm_alignment(ref_align, query, outfolder, lmin = 50, outname = "epa_ready")
 	os.rename(afa, outfolder + outname + ".query.afa")
 
 
-def epa_me_species_counting(refaln, queryaln, folder, lw = 0.2, T = "1" ):
+def epa_me_species_counting(refaln, queryaln, folder, lw = 0.75, T = "2" ):
 	"""input reference alignment and alinged query sequences"""
 	print("Building refrence tree")
+	print refaln
 	ref_tree = build_ref_tree(nfin = refaln, nfout = queryaln.split("/")[-1], nfolder = folder, num_thread = T)
 	af = open(refaln)
 	aln = af.readlines()
@@ -735,24 +748,38 @@ def epa_me_species_counting(refaln, queryaln, folder, lw = 0.2, T = "1" ):
 	print("Collapsing identical sequences")
 	cqali = collapse_identical_seqs(queryaln)
 	chimera_free = run_uchime(sref = refaln, squery = cqali)
+	truth = EPA_pipe.ground_truth(refaln = chimera_free, type = "fasta")
 	bf = open(chimera_free)
 	bln = bf.readlines()
 	bf.close()
 	catalns(bln, aln, queryaln+".epainput")
-	os.remove(chimera_free)
+	#os.remove(chimera_free)
 	os.remove(cqali)
 	print("Running epa")
 	fplacement = run_epa(query = queryaln+".epainput", reftree = ref_tree, folder = folder, num_thread = T)
 	
-	extract_placement(nfin_place = fplacement, nfin_aln = queryaln+".epainput", nfout = folder + "me", min_lw = lw, logfile = "spcount.log")
+	spes1 = extract_placement(nfin_place = fplacement, nfin_aln = queryaln+".epainput", nfout = folder + "me", min_lw = lw, logfile = "spcount.log")
 	print("Building trees for epa results:")
 	raxml_after_epa(nfolder = folder,suf = "lfa", T = T)
 	raxml_g_after_epa(nfolder = folder, nref_align = refaln, suf = "ifa", T = T)
 	print("OTU picking:")
-	otu_picking(nfolder = folder, nfout1 = folder + "me_leaf_picked_otus.fasta"  , nfout2 = folder + "me_inode_picked_otus.fasta" , nref_tree = ref_tree, n_align = queryaln+".epainput", suf = "subtree")
+	spes2 = otu_picking(nfolder = folder, nfout1 = folder + "me_leaf_picked_otus.fasta"  , nfout2 = folder + "me_inode_picked_otus.fasta" , nref_tree = ref_tree, n_align = queryaln+".epainput", suf = "subtree")
 	
 	clean(sfolder = folder)
-	return queryaln+".epainput", ref_tree, fplacement
+	
+	num_right = 0
+	for spe in spes1:
+		#print(spe)
+		if truth.is_correct(spe):
+			num_right = num_right + 1 
+	for spe in spes2:
+		#print(spe)
+		if truth.is_correct(spe):
+			num_right = num_right + 1 
+	
+	print(repr(num_right) + " of " + repr(truth.get_num_species())) 
+	clean(sfolder = folder)
+	return num_right, len(spes1) + len(spes2), truth.get_num_species()
 
 
 def uchime_ready(sfin):
@@ -793,9 +820,135 @@ def clean(sfolder):
 	jks = glob.glob(sfolder + "*.reduced")
 	for jk in jks:
 		os.remove(jk)
+	
+	jks = glob.glob(sfolder + "*.subtree")
+	for jk in jks:
+		os.remove(jk)
+	
+	jks = glob.glob(sfolder + "*.lfa")
+	for jk in jks:
+		os.remove(jk)
+	
+	jks = glob.glob(sfolder + "*.ifa")
+	for jk in jks:
+		os.remove(jk)
+		
+	jks = glob.glob(sfolder + "*.fasta")
+	for jk in jks:
+		os.remove(jk)
+		
+	jks = glob.glob(sfolder + "*.jplace")
+	for jk in jks:
+		os.remove(jk)
+	
+	jks = glob.glob(sfolder + "*.txt")
+	for jk in jks:
+		os.remove(jk)
+	
+	jks = glob.glob(sfolder + "*.tre")
+	for jk in jks:
+		os.remove(jk)
+	
+	
+	jks = glob.glob(sfolder + "*.epainput")
+	for jk in jks:
+		os.remove(jk)
+	#collapse
+	jks = glob.glob(sfolder + "*collapse*")
+	for jk in jks:
+		os.remove(jk)
 
+
+def extract_ref_query_alignment(nfin, nfout):
+	fin = open(nfin,"r")
+	foutr = open(nfout+".ref.afa","w")
+	foutq = open(nfout+".query.afa", "w")
+	 
+	l=fin.readline()
+	seqlen = l.split()[1]
+	
+	rseq_list=[]
+	qseq_list=[]
+	
+	l=fin.readline().strip()
+	while l!="":
+		ls=l.split()
+		tname=ls[0]
+		if tname.endswith("r"):
+			rseq_list.append(l)
+		else:
+			qseq_list.append(l)
+			
+		l=fin.readline().strip()
+	
+	for seq in rseq_list:
+		seqs = seq.split()
+		name = seqs[0]
+		s = seqs[1]
+		foutr.write(">" + name + "\n")
+		foutr.write(s + "\n")
+	
+	for seq in qseq_list:
+		seqs = seq.split()
+		name = seqs[0]
+		s = seqs[1]
+		foutq.write(">" + name + "\n")
+		foutq.write(s + "\n")
+		
+	foutr.close()
+	foutq.close()
+	fin.close()
+	return nfout+".ref.afa", nfout+".query.afa"
+
+
+def batch_test(sfolder, suf = "phy"):
+	sims = glob.glob(sfolder + "*." + suf)
+	log = open(sfolder + "result.log", "a")
+	avg_rights = []
+	allr = 0.0
+	avg_overs = []
+	allo = 0.0
+	for sim in sims:
+		newsime = sim.replace("0.5", "05")
+		os.rename(sim, newsime)
+		#os.remove(sim)
+		sim = newsime
+		fref, fquery = extract_ref_query_alignment(sim, sim)
+		dtnumspe, dnumspe, tnumspe = epa_me_species_counting(refaln = fref, queryaln = fquery, folder = sfolder )
+		av_right = float(dtnumspe) / float(tnumspe)
+		allr = allr + av_right
+		av_over = float(dnumspe - tnumspe) / float(tnumspe)
+		allo = allo + av_over
+		avg_rights.append(av_right)
+		avg_overs.append(av_over)
+		log.write(repr(dtnumspe) + "	" + repr(dnumspe) + "	"+ repr(tnumspe) + "\n")
+		
+	print("Accuracy: " + repr(allr/float(len(avg_rights))))
+	print("Overesti: " + repr(allo/float(len(avg_overs))))
+
+def test_stas(fin):
+	f = open(fin)
+	lines = f.readlines()
+	f.close()
+	avg = 0.0
+	for line in lines:
+		lls = line.split()
+		overe = int(lls[1]) - int(lls[2])
+		avg = avg + float(overe)/float(lls[2])
+	print avg/float(len(lines))
 
 if __name__ == "__main__":
+	#test_stas("/home/zhangje/Desktop/pv_sim_all/set_100/metest/result.log")
+	#batch_test(sfolder = "/home/zhangje/Desktop/pv_sim_all/set_1/metest/", suf = "phy")
+	#1
+	#Accuracy: 0.9023999999999949
+	#Overesti: -0.09759999999999983
+	#10
+	#Accuracy: 0.6008999999999993
+	#Overesti: -0.39910000000000023
+	
+	#print epa_me_species_counting(refaln = "/home/zhangje/Desktop/test2/ref.afa", queryaln = "/home/zhangje/Desktop/test2/query.afa", folder="/home/zhangje/Desktop/test2/" )
+
 	#step1: build_hmm_profile(faln = saln, fbase=binbase)
 	#step2: hmm_align(fprofile = saln, ffasta = sfolder, fbase=binbase)
 	#step3: parse_HMM(saln)
@@ -815,7 +968,7 @@ if __name__ == "__main__":
 	#otu_picking(nfolder = "/home/zhangje/GIT/16S/test/test/", nfout1 = "/home/zhangje/GIT/16S/test/test/" + "me_leaf_picked_otus.fasta"  , nfout2 = "/home/zhangje/GIT/16S/test/test/" + "me_inode_picked_otus.fasta" , nref_tree = "/home/zhangje/GIT/16S/test/query.afa.tre", n_align = "/home/zhangje/GIT/16S/test/query.afa.epainput", suf = "subtree")
 
 	if len(sys.argv) < 3:
-		print("usage: ./EPA_ME.py -step <alignment/species_counting/summary/reduce_ref> -folder <The base of output> -refaln <*.afa> -query <query.afa/fa> ")
+		print("usage: ./EPA_ME.py -step <alignment/species_counting/summary/reduce_ref/test> -folder <The base of output> -refaln <*.afa> -query <query.afa/fa> ")
 		print("Optional:")
 		print("-outname <=epa_ready, alignment only> -minl <minimal seq len = 50> -minlw <minimal lw = 0.2> -T <num_thread = 1>")
 		sys.exit() 
@@ -827,11 +980,11 @@ if __name__ == "__main__":
 	sreftree = ""
 	sappend = ""
 	binbase = ""
-	numt = "1"
+	numt = "2"
 	squery = ""
 	soutname = "epa_ready"
 	iminl = 50
-	fminlw = 0.2
+	fminlw = 0.75
 	
 	for i in range(len(sys.argv)):
 		if sys.argv[i] == "-step":
@@ -872,3 +1025,5 @@ if __name__ == "__main__":
 		stas(sfin = sfolder)
 	elif sstep == "reduce_ref":
 		random_remove_taxa(falign = saln, num_remove = int(numt), num_repeat = 1)
+	elif sstep == "test":
+		batch_test(sfolder = sfolder, suf = "phy")
