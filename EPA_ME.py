@@ -494,7 +494,7 @@ def sp_log(sfout, logs=""):
 	f.close()
 
 
-def otu_picking(nfolder, nfout1, nfout2, nref_tree, n_align, suf = "subtree"):
+def otu_picking(nfolder, nfout1, nfout2, nref_tree, n_align, suf = "subtree", pvalue = 0.001):
 	"""T, tree file; M, search method; N, num cpecies; L, place on leaf; I, place on internal node; R, find reference species; D, find denovo specise; K, read number"""
 	trees = glob.glob(nfolder + "*." + suf)
 	spe_rate = estimate_ref_exp_rate(nref_tree)
@@ -515,7 +515,7 @@ def otu_picking(nfolder, nfout1, nfout2, nref_tree, n_align, suf = "subtree"):
 		else:
 			epa_exp.search(reroot = False, strategy = "H0")
 			logss = logss + "M	H0\n"
-		num_spe = epa_exp.count_species(print_log = False)
+		num_spe = epa_exp.count_species(print_log = False, pv = pvalue)
 		
 		logss = logss + "N	find number specices: " + repr(num_spe) + "\n"
 		
@@ -616,8 +616,8 @@ def random_remove_taxa(falign, num_remove, num_repeat = 1):
 		idxs = index[num_remove:]
 		for idx in idxs:
 			newalign.set_seq(entrs[idx][0], entrs[idx][1])
-		newalign.write(outfile = falign + "_" + repr(num_remove)+ "_" + repr(i + 1) + ".fasta")
-		namel.append(falign + "_" + repr(num_remove)+ "_" + repr(i + 1) + ".fasta")
+		newalign.write(outfile = falign + "_" + repr(num_remove)+ "_" + repr(i + 1) + ".afa")
+		namel.append(falign + "_" + repr(num_remove)+ "_" + repr(i + 1) + ".afa")
 	return namel
 
 
@@ -725,7 +725,7 @@ def hmm_alignment(ref_align, query, outfolder, lmin = 50, outname = "epa_ready")
 	os.rename(afa, outfolder + outname + ".query.afa")
 
 
-def epa_me_species_counting(refaln, queryaln, folder, lw = 0.2, T = "1" ):
+def epa_me_species_counting(refaln, queryaln, folder, lw = 0.2, T = "1", pvalue = 0.001):
 	"""input reference alignment and alinged query sequences"""
 	print("Building refrence tree")
 	ref_tree = build_ref_tree(nfin = refaln, nfout = queryaln.split("/")[-1], nfolder = folder, num_thread = T)
@@ -749,7 +749,7 @@ def epa_me_species_counting(refaln, queryaln, folder, lw = 0.2, T = "1" ):
 	raxml_after_epa(nfolder = folder,suf = "lfa", T = T)
 	raxml_g_after_epa(nfolder = folder, nref_align = refaln, suf = "ifa", T = T)
 	print("OTU picking:")
-	otu_picking(nfolder = folder, nfout1 = folder + "me_leaf_picked_otus.fasta"  , nfout2 = folder + "me_inode_picked_otus.fasta" , nref_tree = ref_tree, n_align = queryaln+".epainput", suf = "subtree")
+	otu_picking(nfolder = folder, nfout1 = folder + "me_leaf_picked_otus.fasta"  , nfout2 = folder + "me_inode_picked_otus.fasta" , nref_tree = ref_tree, n_align = queryaln+".epainput", suf = "subtree", pvalue = pvalue)
 	
 	clean(sfolder = folder)
 	return queryaln+".epainput", ref_tree, fplacement
@@ -817,7 +817,7 @@ if __name__ == "__main__":
 	if len(sys.argv) < 3:
 		print("usage: ./EPA_ME.py -step <alignment/species_counting/summary/reduce_ref> -folder <The base of output> -refaln <*.afa> -query <query.afa/fa> ")
 		print("Optional:")
-		print("-outname <=epa_ready, alignment only> -minl <minimal seq len = 50> -minlw <minimal lw = 0.2> -T <num_thread = 1>")
+		print("-outname <=epa_ready, alignment only> -minl <minimal seq len = 50> -minlw <minimal lw = 0.75> -pv <pvalue = 0.001> -T <num_thread = 1>")
 		sys.exit() 
 		
 	sstep = ""
@@ -832,6 +832,7 @@ if __name__ == "__main__":
 	soutname = "epa_ready"
 	iminl = 50
 	fminlw = 0.2
+	pvalue = 0.001
 	
 	for i in range(len(sys.argv)):
 		if sys.argv[i] == "-step":
@@ -864,10 +865,15 @@ if __name__ == "__main__":
 		elif sys.argv[i] == "-query":
 			i = i + 1
 			squery = sys.argv[i]
+		elif sys.argv[i] == "-pv":
+			i = i + 1
+			pvalue = float(sys.argv[i])
+		
+		
 	if sstep == "alignment":
 		hmm_alignment(ref_align = saln , query = squery,  outfolder = sfolder, lmin = iminl, outname = soutname)
 	elif sstep == "species_counting":
-		epa_me_species_counting(refaln = saln, queryaln = squery, folder = sfolder, lw = fminlw, T =  numt)
+		epa_me_species_counting(refaln = saln, queryaln = squery, folder = sfolder, lw = fminlw, T =  numt, pvalue = pvalue)
 	elif sstep == "summary":
 		stas(sfin = sfolder)
 	elif sstep == "reduce_ref":

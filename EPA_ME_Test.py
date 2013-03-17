@@ -628,8 +628,8 @@ def random_remove_taxa(falign, num_remove, num_repeat = 1):
 		idxs = index[num_remove:]
 		for idx in idxs:
 			newalign.set_seq(entrs[idx][0], entrs[idx][1])
-		newalign.write(outfile = falign + "_" + repr(num_remove)+ "_" + repr(i + 1) + ".fasta")
-		namel.append(falign + "_" + repr(num_remove)+ "_" + repr(i + 1) + ".fasta")
+		newalign.write(outfile = falign + "_" + repr(num_remove)+ "_" + repr(i + 1) + ".afa")
+		namel.append(falign + "_" + repr(num_remove)+ "_" + repr(i + 1) + ".afa")
 	return namel
 
 
@@ -804,7 +804,7 @@ def run_uchime(sref, squery, fbase = ""):
 	return squery + ".chimerafree"
 
 
-def run_epa(query, reftree, folder, num_thread = "1", binbase = ""):
+def run_epa(query, reftree, folder, num_thread = "2", binbase = ""):
 	call(["bin/raxmlHPC-PTHREADS-SSE3","-m","GTRGAMMA","-s",query, "-r", reftree, "-n", query.split("/")[-1],"-p", "1234", "-T", num_thread, "-f", "v", "-w", folder], stdout=open(os.devnull, "w"), stderr=subprocess.STDOUT)
 	os.rename(folder + "RAxML_portableTree."+query.split("/")[-1]+".jplace", folder + query.split("/")[-1] + ".jplace")
 	os.remove(folder + "RAxML_classification." + query.split("/")[-1])
@@ -901,7 +901,7 @@ def extract_ref_query_alignment(nfin, nfout):
 	return nfout+".ref.afa", nfout+".query.afa"
 
 
-def batch_test(sfolder, suf = "phy"):
+def batch_test(sfolder, suf = "phy", numrm = 0):
 	sims = glob.glob(sfolder + "*." + suf)
 	log = open(sfolder + "result.log", "a")
 	avg_rights = []
@@ -914,6 +914,11 @@ def batch_test(sfolder, suf = "phy"):
 		#os.remove(sim)
 		sim = newsime
 		fref, fquery = extract_ref_query_alignment(sim, sim)
+		
+		if numrm > 0:
+			frefs = random_remove_taxa(falign = fref, num_remove = numrm, num_repeat = 1)
+			fref = frefs[0]
+		
 		dtnumspe, dnumspe, tnumspe = epa_me_species_counting(refaln = fref, queryaln = fquery, folder = sfolder )
 		av_right = float(dtnumspe) / float(tnumspe)
 		allr = allr + av_right
@@ -970,7 +975,7 @@ if __name__ == "__main__":
 	if len(sys.argv) < 3:
 		print("usage: ./EPA_ME.py -step <alignment/species_counting/summary/reduce_ref/test> -folder <The base of output> -refaln <*.afa> -query <query.afa/fa> ")
 		print("Optional:")
-		print("-outname <=epa_ready, alignment only> -minl <minimal seq len = 50> -minlw <minimal lw = 0.2> -T <num_thread = 1>")
+		print("-outname <=epa_ready, alignment only> -minl <minimal seq len = 50> -minlw <minimal lw = 0.2> -T <num_thread = 1> -nrm <0>")
 		sys.exit() 
 		
 	sstep = ""
@@ -985,6 +990,8 @@ if __name__ == "__main__":
 	soutname = "epa_ready"
 	iminl = 50
 	fminlw = 0.75
+	numrm = 0
+	
 	
 	for i in range(len(sys.argv)):
 		if sys.argv[i] == "-step":
@@ -1017,6 +1024,9 @@ if __name__ == "__main__":
 		elif sys.argv[i] == "-query":
 			i = i + 1
 			squery = sys.argv[i]
+		elif sys.argv[i] == "-nrm":
+			i = i + 1
+			numrm = int(sys.argv[i])
 	if sstep == "alignment":
 		hmm_alignment(ref_align = saln , query = squery,  outfolder = sfolder, lmin = iminl, outname = soutname)
 	elif sstep == "species_counting":
@@ -1026,4 +1036,4 @@ if __name__ == "__main__":
 	elif sstep == "reduce_ref":
 		random_remove_taxa(falign = saln, num_remove = int(numt), num_repeat = 1)
 	elif sstep == "test":
-		batch_test(sfolder = sfolder, suf = "phy")
+		batch_test(sfolder = sfolder, suf = "phy", numrm = numrm)

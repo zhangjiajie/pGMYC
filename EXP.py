@@ -470,7 +470,7 @@ class exponential_mixture:
 			self.H0(reroot)
 
 
-	def count_species(self, print_log = True):
+	def count_species(self, print_log = True, pv = 0.001):
 		lhr = lh_ratio_test(self.null_logl, self.max_logl, 1)
 		pvalue = lhr.get_p_value()
 		if print_log:
@@ -481,7 +481,7 @@ class exponential_mixture:
 			print("P-value:" + repr(pvalue))
 			self.max_setting.e1.write_file()
 			self.max_setting.e2.write_file()
-		if pvalue < 0.01:
+		if pvalue < pv:
 			num_sp, self.species_list = self.max_setting.count_species()
 			return num_sp
 		else:
