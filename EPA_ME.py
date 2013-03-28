@@ -537,7 +537,7 @@ def otu_picking(nfolder, nfout1, nfout2, nref_tree, n_align, suf = "subtree", pv
 		sp_log(sfout = nfolder + "spcount.log", logs = logss)
 
 
-def stas(sfin):
+def stas(sfin, true_num = 547.0):
 	"""T, tree file; M, search method; N, num cpecies; L, place on leaf; I, place on internal node; R, find reference species; D, find denovo specise; K, read number"""
 	otu1 = 0
 	otu2 = 0 
@@ -546,9 +546,13 @@ def stas(sfin):
 	otu5 = 0
 	match1 = 0
 	match2 = 0 
+	match3 = 0 
+	match4 = 0 
 	match5 = 0
 	nomatch1 = 0
 	nomatch2 = 0
+	nomatch3 = 0
+	nomatch4 = 0
 	nomatch5 =0
 	
 	f = open(sfin)
@@ -565,8 +569,10 @@ def stas(sfin):
 				match2 = match2 + 1
 			if numreads > 2:
 				otu3 = otu3 + 1
+				match3 = match3 + 1
 			if numreads > 3:
 				otu4 = otu4 + 1
+				match4 = match4 + 1
 			if numreads > 4:
 				otu5 = otu5 + 1
 				match5 = match5 + 1
@@ -581,8 +587,10 @@ def stas(sfin):
 				nomatch2 = nomatch2 + 1
 			if numreads > 2:
 				otu3 = otu3 + 1
+				nomatch3 = nomatch3 + 1
 			if numreads > 3:
 				otu4 = otu4 + 1
+				nomatch4 = nomatch4 + 1
 			if numreads > 4:
 				otu5 = otu5 + 1
 				nomatch5 = nomatch5 + 1
@@ -590,17 +598,21 @@ def stas(sfin):
 	f.close()
 	
 	
-	print(">=5 reads OTUs: " + repr(otu5))
-	print(">=5 match OTUs: " + repr(match5))
-	print(">=5 nomatch OTUs: " + repr(nomatch5))
-	print(">=4 reads OTUs: " + repr(otu4))
-	print(">=3 reads OTUs: " + repr(otu3))
-	print(">=2 reads OTUs: " + repr(otu2))
-	print(">=2 match OTUs: " + repr(match2))
-	print(">=2 nomatch OTUs: " + repr(nomatch2))
-	print(">=1 reads OTUs: " + repr(otu1))
-	print(">=1 match OTUs: " + repr(match1))
-	print(">=1 nomatch OTUs: " + repr(nomatch1))
+	print(">=5 reads OTUs - " + repr(otu5))
+	print(">=5 match OTUs: " + repr(match5) + "		" + repr(1.0-(match5/true_num)))
+	print(">=5 nomatch OTUs: " + repr(nomatch5) + "		" + repr(float(nomatch5)/otu5))
+	print(">=4 reads OTUs - " + repr(otu4))
+	print(">=4 match OTUs: " + repr(match4) + "		" + repr(1.0-(match4/true_num)))
+	print(">=4 nomatch OTUs: " + repr(nomatch4) + "		" + repr(float(nomatch4)/otu4))
+	print(">=3 reads OTUs - " + repr(otu3))
+	print(">=3 match OTUs: " + repr(match3) + "		" + repr(1.0-(match3/true_num)))
+	print(">=4 nomatch OTUs: " + repr(nomatch3) + "		" + repr(float(nomatch3)/otu3))
+	print(">=2 reads OTUs - " + repr(otu2))
+	print(">=2 match OTUs: " + repr(match2) + "		" + repr(1.0-(match2/true_num)))
+	print(">=2 nomatch OTUs: " + repr(nomatch2) + "		" + repr(float(nomatch2)/otu2))
+	print(">=1 reads OTUs - " + repr(otu1))
+	print(">=1 match OTUs: " + repr(match1) + "		" + repr(1.0-(match1/true_num)))
+	print(">=1 nomatch OTUs: " + repr(nomatch1) + "		" + repr(float(nomatch1)/otu1))
 
 
 def random_remove_taxa(falign, num_remove, num_repeat = 1):
@@ -807,17 +819,10 @@ if __name__ == "__main__":
 	#step9: otu_picking(nfolder = sfolder, nfout1 = sfolder + "me_leaf_picked_otus.fasta", nfout2 = sfolder + "me_inode_picked_otus.fasta", nref_tree = sreftree, n_align = saln, suf = "subtree")
 	#step10: stas(sfin = sfolder)
 	
-	#hmm(ref_align = "/home/zhangje/GIT/16S/ref.afa" , query = "/home/zhangje/GIT/16S/query.fa", outfolder = "/home/zhangje/GIT/16S/", lmin = 50, outname = "epa_ready")
-	#epa_nohmm(refaln = "/home/zhangje/GIT/16S/test/ref.afa", queryaln= "/home/zhangje/GIT/16S/test/query.afa" , folder= "/home/zhangje/GIT/16S/test/", T = "2" )
-	
-	#raxml_after_epa(nfolder = "/home/zhangje/GIT/16S/test/test/",suf = "lfa", T = "2")
-	#raxml_g_after_epa(nfolder = "/home/zhangje/GIT/16S/test/test/", nref_align = "/home/zhangje/GIT/16S/test/ref.afa", suf = "ifa", T = "2")
-	#otu_picking(nfolder = "/home/zhangje/GIT/16S/test/test/", nfout1 = "/home/zhangje/GIT/16S/test/test/" + "me_leaf_picked_otus.fasta"  , nfout2 = "/home/zhangje/GIT/16S/test/test/" + "me_inode_picked_otus.fasta" , nref_tree = "/home/zhangje/GIT/16S/test/query.afa.tre", n_align = "/home/zhangje/GIT/16S/test/query.afa.epainput", suf = "subtree")
-
 	if len(sys.argv) < 3:
 		print("usage: ./EPA_ME.py -step <alignment/species_counting/summary/reduce_ref> -folder <The base of output> -refaln <*.afa> -query <query.afa/fa> ")
 		print("Optional:")
-		print("-outname <=epa_ready, alignment only> -minl <minimal seq len = 50> -minlw <minimal lw = 0.75> -pv <pvalue = 0.001> -T <num_thread = 1>")
+		print("-outname <=epa_ready, alignment only> -minl <minimal seq len = 50> -minlw <minimal lw = 0.75> -pv <pvalue = 0.001> -T <num_thread = 2>")
 		sys.exit() 
 		
 	sstep = ""
@@ -831,7 +836,7 @@ if __name__ == "__main__":
 	squery = ""
 	soutname = "epa_ready"
 	iminl = 50
-	fminlw = 0.2
+	fminlw = 0.75
 	pvalue = 0.001
 	
 	for i in range(len(sys.argv)):
@@ -875,6 +880,6 @@ if __name__ == "__main__":
 	elif sstep == "species_counting":
 		epa_me_species_counting(refaln = saln, queryaln = squery, folder = sfolder, lw = fminlw, T =  numt, pvalue = pvalue)
 	elif sstep == "summary":
-		stas(sfin = sfolder)
+		stas(sfin = sfolder, true_num = float(numt))
 	elif sstep == "reduce_ref":
 		random_remove_taxa(falign = saln, num_remove = int(numt), num_repeat = 1)

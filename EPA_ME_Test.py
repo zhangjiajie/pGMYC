@@ -9,7 +9,6 @@ import glob
 import EXP
 import subprocess
 import random
-import EPA_pipe
 from ete2 import Tree, TreeStyle, TextFace, SeqGroup, NodeStyle
 from scipy.optimize import fmin
 from collections import deque
@@ -350,8 +349,8 @@ def extract_placement(nfin_place, nfin_aln, nfout, min_lw = 0.6, logfile = "spco
 
 
 #build tree with -g
-def build_constrain_tree(nsfin, ntfin, nfout, nfolder, num_thread = "1"):
-	call(["bin/raxmlHPC-PTHREADS-SSE3","-m","GTRGAMMA","-s",nsfin, "-g", ntfin, "-n",nfout,"-p", "1234", "-T", num_thread, "-w", nfolder], stdout=open(os.devnull, "w"), stderr=subprocess.STDOUT)
+def build_constrain_tree(nsfin, ntfin, nfout, nfolder, num_thread = "2"):
+	call(["bin/raxmlHPC-PTHREADS-SSE3","-m","GTRGAMMA","-s",nsfin, "-g", ntfin, "-n",nfout,"-p", "1234", "-T", num_thread, "-w", nfolder]) #, stdout=open(os.devnull, "w"), stderr=subprocess.STDOUT)
 	os.rename(nfolder + "RAxML_bestTree."+nfout, nfolder + nfout + ".tre")
 	os.remove(nfolder + "RAxML_info." + nfout)
 	os.remove(nfolder + "RAxML_log." + nfout)
@@ -418,7 +417,7 @@ def raxml_after_epa(nfolder, suf = "lfa", T = "1"):
 
 
 #build the phylogenetic tree -g option
-def raxml_g_after_epa(nfolder, nref_align, suf = "ifa", T = "1"):
+def raxml_g_after_epa(nfolder, nref_align, suf = "ifa", T = "2"):
 	align_orgin = SeqGroup(sequences = nref_align)
 	ref_taxa = []
 	for entr in align_orgin.get_entries():
@@ -737,6 +736,52 @@ def hmm_alignment(ref_align, query, outfolder, lmin = 50, outname = "epa_ready")
 	os.rename(afa, outfolder + outname + ".query.afa")
 
 
+
+class ground_truth:
+	def __init__(self, refaln, type = ""):
+		if type == "fasta":
+			self.aln = SeqGroup(sequences=refaln)
+		else:
+			self.aln = SeqGroup(sequences=refaln, format='phylip_relaxed')
+		self.true_spe = {}
+		self._get_truth()
+		
+	
+	def _get_truth(self):
+		for entr in self.aln.get_entries():
+			name = entr[0]
+			gid = name.split(".")[0]
+			self.true_spe[gid] = []
+		
+		for entr in self.aln.get_entries():
+			name = entr[0]
+			gid = name.split(".")[0]
+			group = self.true_spe[gid]
+			group.append(name)
+			self.true_spe[gid] = group
+	
+	def is_correct(self,names):
+		#*R*
+		newnames = []
+		for name in names:
+			if name.startswith("*R*"):
+				pass
+			else:
+				newnames.append(name)
+			
+		names_set = set(newnames)
+		for key in self.true_spe.keys():
+			sps = self.true_spe[key]
+			sps_set = set(sps)
+			if names_set == sps_set:
+				return True
+		return False
+	
+	def get_num_species(self):
+		return len(self.true_spe.keys())
+
+
+
 def epa_me_species_counting(refaln, queryaln, folder, lw = 0.75, T = "2" ):
 	"""input reference alignment and alinged query sequences"""
 	print("Building refrence tree")
@@ -748,7 +793,7 @@ def epa_me_species_counting(refaln, queryaln, folder, lw = 0.75, T = "2" ):
 	print("Collapsing identical sequences")
 	cqali = collapse_identical_seqs(queryaln)
 	chimera_free = run_uchime(sref = refaln, squery = cqali)
-	truth = EPA_pipe.ground_truth(refaln = chimera_free, type = "fasta")
+	truth = ground_truth(refaln = chimera_free, type = "fasta")
 	bf = open(chimera_free)
 	bln = bf.readlines()
 	bf.close()
@@ -901,7 +946,7 @@ def extract_ref_query_alignment(nfin, nfout):
 	return nfout+".ref.afa", nfout+".query.afa"
 
 
-def batch_test(sfolder, suf = "phy", numrm = 0):
+def batch_test(sfolder, suf = "phy", numrm = 0, minlw = 0.75):
 	sims = glob.glob(sfolder + "*." + suf)
 	log = open(sfolder + "result.log", "a")
 	avg_rights = []
@@ -919,7 +964,7 @@ def batch_test(sfolder, suf = "phy", numrm = 0):
 			frefs = random_remove_taxa(falign = fref, num_remove = numrm, num_repeat = 1)
 			fref = frefs[0]
 		
-		dtnumspe, dnumspe, tnumspe = epa_me_species_counting(refaln = fref, queryaln = fquery, folder = sfolder )
+		dtnumspe, dnumspe, tnumspe = epa_me_species_counting(refaln = fref, queryaln = fquery, folder = sfolder, lw = minlw)
 		av_right = float(dtnumspe) / float(tnumspe)
 		allr = allr + av_right
 		av_over = float(dnumspe - tnumspe) / float(tnumspe)
@@ -975,7 +1020,7 @@ if __name__ == "__main__":
 	if len(sys.argv) < 3:
 		print("usage: ./EPA_ME.py -step <alignment/species_counting/summary/reduce_ref/test> -folder <The base of output> -refaln <*.afa> -query <query.afa/fa> ")
 		print("Optional:")
-		print("-outname <=epa_ready, alignment only> -minl <minimal seq len = 50> -minlw <minimal lw = 0.2> -T <num_thread = 1> -nrm <0>")
+		print("-outname <=epa_ready, alignment only> -minl <minimal seq len = 50> -minlw <minimal lw = 0.75> -T <num_thread = 1> -nrm <0>")
 		sys.exit() 
 		
 	sstep = ""
@@ -1036,4 +1081,4 @@ if __name__ == "__main__":
 	elif sstep == "reduce_ref":
 		random_remove_taxa(falign = saln, num_remove = int(numt), num_repeat = 1)
 	elif sstep == "test":
-		batch_test(sfolder = sfolder, suf = "phy", numrm = numrm)
+		batch_test(sfolder = sfolder, suf = "phy", numrm = numrm, minlw = fminlw)
