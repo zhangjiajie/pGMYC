@@ -756,6 +756,54 @@ def batch_gmyc_umtree(folder="./", suf = "simulate_tree", num_spe_tree = 10, sou
 	print("num_samples: " + repr(len(phyl)))
 
 
+def batch_me_umtree(folder="./", suf = "simulate_tree", num_spe_tree = 10, sout = "log.txt"):
+	phyl = glob.glob(folder + suf +"*")
+	rt_correct = 0
+	rt_num = 0
+	for phy in phyl:
+		treename = phy.split("/")[-1]
+		alnname = treename.split("_")[-1]
+		palnname = alnname.split(".")
+		alnname = folder + "simulated_set_" + palnname[0] + "." + palnname[1] + "_" + palnname[2] + ".phy"
+		print(alnname)
+		c_alnname = alnname + ".c"
+		fin=open(alnname,"r")
+		fout=open(c_alnname,"w")
+		l=fin.readline().strip()
+		while l!="":
+			fout.write(l + "\n")
+			l=fin.readline().strip()
+		fin.close()
+		fout.close()
+		os.remove(alnname)
+		os.rename(c_alnname, alnname)
+		
+		
+		gt = ground_truth(alnname)
+		
+		me = EXP.exponential_mixture(phy)
+		me.search(reroot = True, strategy = "H0")
+		num_spe = me.count_species(print_log = False)
+		spes = me.species_list
+		
+		num_correct = 0 
+		for spe in spes:
+			corr = gt.is_correct(spe)
+			if corr:
+				num_correct = num_correct + 1
+		
+		print("correct: " + repr(num_correct))
+		print("delimit: " + repr(len(spes)))
+		print("overesti: " + repr((float(len(spes)) - float(gt.get_num_species()))/float(gt.get_num_species())))
+		rt_num = rt_num + (float(len(spes)) - float(gt.get_num_species()))/float(gt.get_num_species())
+		rt_correct = rt_correct + float(num_correct)/float(gt.get_num_species())
+		
+	print("Average correct ration: "  +  repr(rt_correct/float(len(phyl))))
+	print("Average overestimate: "  +  repr(rt_num/float(len(phyl))))
+	print("num_correct: " + repr(rt_correct))
+	print("num_samples: " + repr(len(phyl)))
+
+
 def batch_gmyc_umtree2(folder="./", suf = "simulate_tree", num_spe_tree = 10, sout = "log.txt"):
 	phyl = glob.glob(folder + suf +"*")
 	rt_correct = 0
@@ -804,7 +852,8 @@ def batch_gmyc_umtree2(folder="./", suf = "simulate_tree", num_spe_tree = 10, so
 
 if __name__ == "__main__":
 	
-	extract_ref_query_alignment(nfin = "/home/zhangje/Desktop/simulated_set_10_2.phy", nfout = "/home/zhangje/Desktop/cao")
+	#batch_me_umtree(folder="/home/zhangje/GIT/gGMYC/test/", suf = "simulate_tree", num_spe_tree = 10, sout = "log.txt")
+	#extract_ref_query_alignment(nfin = "/home/zhangje/Desktop/simulated_set_10_2.phy", nfout = "/home/zhangje/Desktop/cao")
 	#epa_me_species_counting(refaln = "/home/zhangje/Desktop/test/ref.afa", queryaln = "/home/zhangje/Desktop/test/query.afa", folder="/home/zhangje/Desktop/test/" )
 	
 	

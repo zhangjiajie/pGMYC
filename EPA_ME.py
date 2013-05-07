@@ -554,10 +554,13 @@ def stas(sfin, true_num = 547.0):
 	nomatch3 = 0
 	nomatch4 = 0
 	nomatch5 =0
+	epa = 0
 	
 	f = open(sfin)
 	l = f.readline()
 	while l!="":
+		if l.startswith("T"):
+			epa = epa + 1
 		if l.startswith("R"):
 			l = f.readline()
 			numreads = int(l.split(":")[-1])
@@ -597,7 +600,7 @@ def stas(sfin, true_num = 547.0):
 		l = f.readline()
 	f.close()
 	
-	
+	print("EPA - " + repr(epa))
 	print(">=5 reads OTUs - " + repr(otu5))
 	print(">=5 match OTUs: " + repr(match5) + "		" + repr(1.0-(match5/true_num)))
 	print(">=5 nomatch OTUs: " + repr(nomatch5) + "		" + repr(float(nomatch5)/otu5))

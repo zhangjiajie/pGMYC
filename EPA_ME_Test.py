@@ -946,7 +946,7 @@ def extract_ref_query_alignment(nfin, nfout):
 	return nfout+".ref.afa", nfout+".query.afa"
 
 
-def batch_test(sfolder, suf = "phy", numrm = 0, minlw = 0.75):
+def batch_test(sfolder, suf = "phy", numrm = 0, minlw = 0.5):
 	sims = glob.glob(sfolder + "*." + suf)
 	log = open(sfolder + "result.log", "a")
 	avg_rights = []
@@ -976,6 +976,104 @@ def batch_test(sfolder, suf = "phy", numrm = 0, minlw = 0.75):
 	print("Accuracy: " + repr(allr/float(len(avg_rights))))
 	print("Overesti: " + repr(allo/float(len(avg_overs))))
 
+def phy2fasta(fin):
+	f = open(fin)
+	fout = open(fin+".afa", "w")
+	line = f.readline()
+	line = f.readline()
+	while line!="":
+		lls = line.split()
+		fout.write(">" + lls[0] + "\n")
+		fout.write(lls[1] + "\n")
+		line = f.readline().strip()
+	f.close()
+	fout.close()
+	return fin + ".afa"
+
+def crop_species_counting(falin, ff = "fasta"):
+	if ff!="fasta":
+		fafa = phy2fasta(falin)
+	else:
+		fafa = falin
+	call(["bin/crop", "-i", fafa], stdout=open(os.devnull, "w"), stderr=subprocess.STDOUT)
+	truth = ground_truth(refaln = fafa, type = "fasta")
+	foutcrop = open(fafa + ".cluster.list")
+	lines = foutcrop.readlines()
+	foutcrop.close()
+	num_correct = 0 
+	num_species = 0
+	for line in lines:
+		lls = line.strip().split()
+		taxas = lls[1]
+		taxon = taxas.split(",")
+		iscorrect = truth.is_correct(taxon)
+		if iscorrect:
+			num_correct = num_correct + 1
+		num_species = num_species + 1
+		
+	jks = glob.glob(fafa + ".*")
+	for jk in jks:
+		os.remove(jk)
+		
+	return num_correct, num_species
+
+def batch_test_crop(sfolder, suf = "phy"):
+	sims = glob.glob(sfolder + "*." + suf)
+	log = open(sfolder + "crop_result.log", "a")
+	avg_rights = []
+	allr = 0.0
+	avg_overs = []
+	allo = 0.0
+	for sim in sims:
+		newsime = sim.replace("0.5", "05")
+		os.rename(sim, newsime)
+		sim = newsime
+		fref, fquery = extract_ref_query_alignment(sim, sim)
+		nc, ns = crop_species_counting(falin = fquery)
+		#print nc 
+		#print ns
+		av_right = float(nc) / 10.0
+		allr = allr + av_right
+		av_over = float(ns - 10) / float(10)
+		allo = allo + av_over
+		avg_rights.append(av_right)
+		avg_overs.append(av_over)
+		log.write(repr(10) + "	" + repr(nc) + "	"+ repr(ns) + "\n")
+		
+	print("Accuracy: " + repr(allr/float(len(avg_rights))))
+	print("Overesti: " + repr(allo/float(len(avg_overs))))
+
+
+def uclust_species_counting(falin, sid = "0.97"):
+	call(["bin/usearch", "-cluster_fast", falin, "-id", sid, "-uc", falin +".uc"], stdout=open(os.devnull, "w"), stderr=subprocess.STDOUT)
+	truth = ground_truth(refaln = falin, type = "fasta")
+	fucout = open(falin +".uc")
+	ucs = fucout.readlines()
+	fucout.close()
+	c_list = []
+	for uc in ucs:
+		ucss = uc.split()
+		if ucss[0] == "C":
+			c_list.append(ucss[8])
+	
+	num_correct = 0 
+	num_species = 0
+	
+	for center in c_list:
+		one_sp = []
+		one_sp.append(center)
+		for uc in ucs:
+			ucss = uc.split()
+			if ucss[0] == "H":
+				if ucss[9] == center:
+					one_sp.append(ucss[8])
+		iscorrect = truth.is_correct(one_sp)
+		if iscorrect:
+			num_correct = num_correct + 1
+		num_species = num_species + 1
+		
+	return num_correct, num_species
+
 def test_stas(fin):
 	f = open(fin)
 	lines = f.readlines()
@@ -988,6 +1086,16 @@ def test_stas(fin):
 	print avg/float(len(lines))
 
 if __name__ == "__main__":
+	
+	nc, ns = uclust_species_counting(falin = "/home/zhangje/GIT/gGMYC/test/set1.fasta", sid = "0.90")
+	print nc 
+	print ns 
+	
+	#batch_test_crop(sfolder = "/home/zhangje/GIT/gGMYC/test/", suf = "phy")
+	#nc, ns = crop_species_counting("/home/zhangje/GIT/gGMYC/test/set1.phy")
+	#print nc 
+	#print ns
+	
 	#test_stas("/home/zhangje/Desktop/pv_sim_all/set_100/metest/result.log")
 	#batch_test(sfolder = "/home/zhangje/Desktop/pv_sim_all/set_1/metest/", suf = "phy")
 	#1
@@ -1018,7 +1126,7 @@ if __name__ == "__main__":
 	#otu_picking(nfolder = "/home/zhangje/GIT/16S/test/test/", nfout1 = "/home/zhangje/GIT/16S/test/test/" + "me_leaf_picked_otus.fasta"  , nfout2 = "/home/zhangje/GIT/16S/test/test/" + "me_inode_picked_otus.fasta" , nref_tree = "/home/zhangje/GIT/16S/test/query.afa.tre", n_align = "/home/zhangje/GIT/16S/test/query.afa.epainput", suf = "subtree")
 
 	if len(sys.argv) < 3:
-		print("usage: ./EPA_ME.py -step <alignment/species_counting/summary/reduce_ref/test> -folder <The base of output> -refaln <*.afa> -query <query.afa/fa> ")
+		print("usage: ./EPA_ME.py -step <alignment/species_counting/summary/reduce_ref/test/crop> -folder <The base of output> -refaln <*.afa> -query <query.afa/fa> ")
 		print("Optional:")
 		print("-outname <=epa_ready, alignment only> -minl <minimal seq len = 50> -minlw <minimal lw = 0.75> -T <num_thread = 1> -nrm <0>")
 		sys.exit() 
@@ -1034,7 +1142,7 @@ if __name__ == "__main__":
 	squery = ""
 	soutname = "epa_ready"
 	iminl = 50
-	fminlw = 0.75
+	fminlw = 0.5
 	numrm = 0
 	
 	
@@ -1082,3 +1190,5 @@ if __name__ == "__main__":
 		random_remove_taxa(falign = saln, num_remove = int(numt), num_repeat = 1)
 	elif sstep == "test":
 		batch_test(sfolder = sfolder, suf = "phy", numrm = numrm, minlw = fminlw)
+	elif sstep == "crop":
+		batch_test_crop(sfolder = sfolder)

@@ -571,7 +571,7 @@ class exponential_mixture:
 if __name__ == "__main__":
 	
 	if len(sys.argv) < 3: 
-		print("usage: ./EXP.py -t <tree_of_life.tre> -m <H0/H1/H2/H3/Brutal> -w(whitening) -r(reroot)  -s(show)  -c <scale> -maxiters <max num of brutal search(20000)> -minbr <minimal branch length accepted> -sprate <fix speciation rate>")
+		print("usage: ./EXP.py -t <tree_of_life.tre> -m <H0/H1/H2/H3/Brutal> -w(whitening) -r(reroot)  -s(show)  -c <scale> -maxiters <max num of brutal search(20000)> -minbr <minimal branch length accepted> -sprate <fix speciation rate> -pvalue <default 0.001>")
 		sys.exit()
 	
 	stree = ""
@@ -584,6 +584,7 @@ if __name__ == "__main__":
 	min_brl = 0.0001
 	spe_rate = -1.0
 	whiten = False
+	pvalue = 0.001
 	
 	for i in range(len(sys.argv)):
 		if sys.argv[i] == "-t":
