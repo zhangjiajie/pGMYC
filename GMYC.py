@@ -1,18 +1,32 @@
 #! /usr/bin/env python
-import sys
-import math
-from ete2 import Tree, TreeStyle, TextFace, SeqGroup, NodeStyle
-from subprocess import call
-from scipy.optimize import fmin
-from scipy.optimize import fmin_powell
-from scipy.optimize import fmin_l_bfgs_b
-from scipy.optimize import fmin_tnc
-from scipy import stats
-import matplotlib.pyplot as plt
+try:
+	import sys
+	import math
+	import ete2
+	import os
+	import subprocess
+	from ete2 import Tree, TreeStyle, TextFace, SeqGroup, NodeStyle
+	from subprocess import call
+	from scipy.optimize import fmin
+	from scipy.optimize import fmin_powell
+	from scipy.optimize import fmin_l_bfgs_b
+	from scipy.optimize import fmin_tnc
+	from scipy import stats
+	import matplotlib.pyplot as plt
+	from subprocess import call
+	from nexus import NexusReader
+except ImportError:
+	print("Please install the scipy, matplotlib package first.")
+	print("If your OS is ubuntu or has apt installed, you can try the following:") 
+	print(" sudo apt-get install python-setuptools python-numpy python-qt4 python-scipy python-mysqldb python-lxml python-matplotlib")
+	#print(" sudo easy_install -U ete2")
+	#print("Otherwise, please go to http://ete.cgenomics.org/ for instructions")
+	sys.exit()
 
 class um_tree:
 	def __init__(self, tree):
 		self.tree = Tree(tree, format = 1)
+		self.tree.resolve_polytomy(default_dist=0.000001, recursive=True)
 		self.tree.dist = 0
 		self.tree.add_feature("age", 0)
 		self.nodes = self.tree.get_descendants()
@@ -222,6 +236,29 @@ class um_tree:
 			for taxa in sp:
 				taxas = taxas + taxa.name + ", "
 			print("	" + taxas[:-1])
+	
+	
+	def output_species(self, taxa_order = []):
+		"""taxa_order is a list of taxa names, the paritions will be output as the same order"""
+		if len(taxa_order) == 0:
+			taxa_order = self.tree.get_leaf_names()
+		
+		num_taxa = 0
+		for sp in self.species_list:
+			for taxa in sp:
+				num_taxa = num_taxa + 1
+		if not len(taxa_order) == num_taxa:
+			print("error error, taxa_order != num_taxa!")
+			return None, None
+		else: 
+			partion = [-1] * num_taxa
+			cnt = 1
+			for sp in self.species_list:
+				for taxa in sp:
+					idx = taxa_order.index(taxa.name)
+					partion[idx] = cnt
+				cnt = cnt + 1
+			return taxa_order, partion
 
 
 	def num_lineages(self, wt_list):
@@ -627,14 +664,14 @@ def optimize_null_model(umtree):
 	cnt = 0
 	while change > min_change and cnt < max_iters:
 		cnt = cnt + 1
-		para, nn, cc = fmin_l_bfgs_b(tar_fun_null, [1], args = [nm], disp = False, bounds = [[0, 10]], approx_grad = True)
+		para, nn, cc = fmin_l_bfgs_b(tar_fun_null, [1], args = [nm], bounds = [[0, 10]], approx_grad = True)
 		curr_logl = nm.logl(p = para[0])
 		change = abs(curr_logl - last_llh)
 		last_llh = curr_logl
 	return last_llh
 
 
-def gmyc(tree, print_detail = False, show_tree = False, show_llh = False, show_lineages = False, print_species = False):
+def gmyc(tree, print_detail = False, show_tree = False, show_llh = False, show_lineages = False, print_species = False, pv = 0.01):
 	llh_list = []
 	min_change = 0.1
 	max_iters = 100
@@ -651,7 +688,7 @@ def gmyc(tree, print_detail = False, show_tree = False, show_llh = False, show_l
 		
 		while change > min_change and cnt < max_iters:
 			cnt = cnt + 1
-			para, nn, cc = fmin_l_bfgs_b(tar_fun, [1, 1], args = [tt], disp = False, bounds = [[0, 10], [0, 10]], approx_grad = True)
+			para, nn, cc = fmin_l_bfgs_b(tar_fun, [1, 1], args = [tt], bounds = [[0, 10], [0, 10]], approx_grad = True)
 			#para, nn, cc = fmin_tnc(tar_fun, [0, 0], args = [tt], disp = False, bounds = [[0, 10], [0, 10]], approx_grad = True)
 			tt.update(para[0], para[1])
 			logl = tt.sum_llh()
@@ -698,16 +735,109 @@ def gmyc(tree, print_detail = False, show_tree = False, show_llh = False, show_l
 	
 	if show_tree:
 		utree.tree.show()
+	else:
+		utree.tree.render(tree+".png")
+		utree.tree.render(tree+".pdf")
 	
-	if lrt.get_p_value() >= 0.01:
+	if lrt.get_p_value() >= pv:
 		return one_spe
 	else:
 		return spes
 
 
+def gmyc_func(tree, taxa_order, print_detail = False, show_tree = False, show_llh = False, show_lineages = False, print_species = False, pv = 0.01):
+	llh_list = []
+	min_change = 0.1
+	max_iters = 100
+	best_llh = float("-inf")
+	best_num_spe = -1
+	best_node = None
+	utree = um_tree(tree)
+	for tnode in utree.nodes:
+		wt_list, num_spe = utree.get_waiting_times(threshold_node = tnode)
+		tt = tree_time(wt_list, num_spe)
+		last_llh = float("-inf")
+		change = float("inf")
+		cnt = 0
+		
+		while change > min_change and cnt < max_iters:
+			cnt = cnt + 1
+			para, nn, cc = fmin_l_bfgs_b(tar_fun, [1, 1], args = [tt], bounds = [[0, 10], [0, 10]], approx_grad = True)
+			#para, nn, cc = fmin_tnc(tar_fun, [0, 0], args = [tt], disp = False, bounds = [[0, 10], [0, 10]], approx_grad = True)
+			tt.update(para[0], para[1])
+			logl = tt.sum_llh()
+			change = abs(logl - last_llh)
+			last_llh = logl
+		
+		final_llh = tt.sum_llh()
+		if final_llh > best_llh:
+			best_llh = final_llh
+			best_num_spe = num_spe
+			best_node = tnode
+		llh_list.append(final_llh)
+	
+	null_logl = optimize_null_model(utree)
+	
+	wt_list, num_spe = utree.get_waiting_times(threshold_node = best_node)
+	one_spe, spes = utree.get_species()
+	t_order, partion = utree.output_species(taxa_order = taxa_order)
+	
+	lrt = lh_ratio_test(null_llh = null_logl, llh = best_llh, df = 2)
+	
+	print lrt.get_p_value()
+	if lrt.get_p_value() >= pv:
+		return [1] * len(one_spe[0])
+	else:
+		return partion
+
+
+def call_upgma(fin):
+	basepath = os.path.dirname(os.path.abspath(__file__))
+	call([basepath + "/bin/FastTree","-nt",fin], stdout=open(fin+".upgmaout", "w"), stderr=subprocess.STDOUT)
+	fall = open(fin+".upgmaout")
+	ss = fall.readlines()
+	fall.close()
+	fout = open(fin+".upgma", "w")
+	fout.write(ss[2])
+	fout.close()
+	os.remove(fin+".upgmaout")
+	return fin+".upgma"
+
+
+def print_options():
+	print("usage: ./GMYC.py -t example/gmyc_example.tre -st")
+	print("usage: ./GMYC.py -a example/query.afa -st")
+	print("Options:")
+	print("    -a alignment                     Specify the alignment, GMYC.py will build a UPGMA tree using FastTree.\n")
+	print("    -t input_umtree_file             Specify the input ultrametric tree.\n")
+	print("    -pvalue (0-1)                    Set the p-value for likelihood ratio test with TWO degrees of freedom.(default 0.01)")
+	print("                                     Note the old split package used three degrees of freedom which has been proven wrong.\n")
+	print("    -st                              Plot the delimited species on the tree.(default not show)\n")
+	print("    -ps                              Print delimited species on the screen.(default not show)\n")
+	print("    -pd                              Print optimization details.(default not)\n")
+	print("    -sl                              Show the log likelihood value plot.(default not)\n")
+	print("    -sn                              Show lineages through time plot. (default not)\n")
+
+
 if __name__ == "__main__":
+	print("This is pGMYC - a python implementation of GMYC model for species delimitation.")
+	print("Version 1.1 released by Jiajie Zhang on 10-11-2013\n")
+	print("This program will delimit species on a rooted ultrametric tree, ")
+	print("using single threshold GMYC model.")
+	print("The input tree should be in Newick format and must be ultrametric.")
+	print("Some common programs to infer ultrametric tree are: BEAST, DPPDIV and r8s." )
+	print("pGMYC needs scipy and matplotlib packages to be installed.\n")
+	print("**This new version experimentally support multifurcating tree, which ")
+	print("**is quite common for many ultrametric tree inference programs.")
+	print("**Note: pGMYC does not check the ultrametricity of the input tree! \n")
+	print("--Please cite: \"J. Zhang, P. Kapli, P. Pavlidis, A. Stamatakis: A General") 
+	print("--Species Delimitation Method with Applications to Phylogenetic Placements. ")
+	print("--Bioinformatics (2013), 29 (22): 2869-2876.\" ")
+	print("--If you found pGMYC is useful to your research. \n")
+	print("Questions and bug reports, please send to:")
+	print("bestzhangjiajie@gmail.com\n")
 	if len(sys.argv) < 3: 
-		print("usage: ./EXP.py -t <tree_of_life.tre> -pd(print detail)  -st(show tree)  -sl(show llh plot)  -sn(show lineage number plot)  -ps(print species)")
+		print_options()
 		sys.exit()
 	stree = ""
 	sprint_detail = False 
@@ -715,11 +845,17 @@ if __name__ == "__main__":
 	sshow_llh = False 
 	sshow_lineages = False 
 	sprint_species = False
+	p_value = 0.01
+	salignment = ""
+	
 	
 	for i in range(len(sys.argv)):
 		if sys.argv[i] == "-t":
 			i = i + 1
 			stree = sys.argv[i]
+		if sys.argv[i] == "-pvalue":
+			i = i + 1
+			p_value = float(sys.argv[i])
 		elif sys.argv[i] == "-pd":
 			sprint_detail = True
 		elif sys.argv[i] == "-st":
@@ -730,12 +866,45 @@ if __name__ == "__main__":
 			sshow_lineages = True
 		elif sys.argv[i] == "-ps":
 			sprint_species = True
+		elif sys.argv[i] == "-a":
+			i = i + 1
+			salignment = sys.argv[i]
+		elif i == 0:
+			pass
+		elif sys.argv[i].startswith("-"):
+			print("Unknown options: " + sys.argv[i])
+			print_options()
+			sys.exit()
+	
+	if salignment!="":
+		basepath = os.path.dirname(os.path.abspath(__file__))
+		if not os.path.exists(basepath + "/bin/FastTree"):
+			print("GMYC.py uses FastTreeUPGMA to infer ultramatric trees,")
+			print("please download the latest source code from: ")
+			print("http://meta.microbesonline.org/fasttree/FastTreeUPGMA.c")
+			print("Please complie with gcc -O3 -finline-functions -funroll-loops -Wall -o FastTree FastTreeUPGMA.c -lm, ")
+			print("and put FastTree it to bin/  \n")
+			sys.exit() 
+		print("Building UPGMA tree using FastTree.")
+		stree = call_upgma(salignment)
 	
 	if stree == "":
-		print("usage: ./EXP.py -t <tree_of_life.tre> -pd(print detail)  -st(show tree)  -sl(show llh plot)  -sn(show lineage number plot)  -ps(print species)")
+		print("Input tree is empty.")
+		print_options()
 		sys.exit()
 	
-	sp = gmyc(tree = stree, print_detail = sprint_detail, show_tree = sshow_tree, show_llh = sshow_llh, show_lineages = sshow_lineages, print_species = sprint_species)
-	print("Final number of estimated species by GMYC: " +  repr(len(sp)) )
+	try:
+		treetest = open(stree)
+		l1 = treetest.readline()
+		if l1.strip() == "#NEXUS":
+			nexus = NexusReader(stree)
+			nexus.blocks['trees'].detranslate()
+			stree = nexus.trees.trees[0] 
+		treetest.close()
+		
+		sp = gmyc(tree = stree, print_detail = sprint_detail, show_tree = sshow_tree, show_llh = sshow_llh, show_lineages = sshow_lineages, print_species = sprint_species, pv = p_value)
+		print("Final number of estimated species by GMYC: " +  repr(len(sp)) )
+	except ete2.parser.newick.NewickError:
+		print("Unexisting tree file or Malformed newick tree structure.")
 
 
